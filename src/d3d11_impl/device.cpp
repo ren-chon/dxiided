@@ -1,5 +1,13 @@
 #include "d3d11_impl/device.hpp"
+#include "d3d11_impl/device_features.hpp"
 #include <dxgi1_2.h>
+
+const GUID IID_IUnknown = {0x00000000, 0x0000, 0x0000, {0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46}};
+const GUID IID_ID3D12Object = {0xc4fec28f, 0x7966, 0x4e95, {0x9f,0x94, 0xf4,0x31,0xcb,0x56,0xc3,0xb8}};
+const GUID IID_ID3D12Device = {0x189819f1, 0x1db6, 0x4b57, {0xbe,0x54, 0x18,0x21,0x33,0x9b,0x85,0xf7}};
+const GUID IID_ID3D12Device1 = {0x77acce80, 0x638e, 0x4e65, {0x88,0x95, 0xc1,0xf2,0x33,0x86,0x86,0x3e}};
+const GUID IID_ID3D12Device2 = {0x30baa41e, 0xb15b, 0x475c, {0xa0,0xbb, 0x1a,0xf5,0xc5,0xb6,0x43,0x28}};
+
 
 namespace dxiided {
 
@@ -15,6 +23,13 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
                            D3D_FEATURE_LEVEL minimum_feature_level,
                            REFIID riid,
                            void** device) {
+    if (!device) {
+        ERR("Invalid device pointer.\n");
+        return E_INVALIDARG;
+    }
+
+    *device = nullptr;
+
     Microsoft::WRL::ComPtr<IDXGIAdapter> dxgi_adapter;
     if (adapter) {
         if (FAILED(adapter->QueryInterface(IID_PPV_ARGS(&dxgi_adapter)))) {
@@ -58,18 +73,18 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
         return hr;
     }
 
-    if (feature_level < minimum_feature_level) {
-        WARN("Created device with feature level %#x, which is lower than requested %#x.\n",
-             feature_level, minimum_feature_level);
+    // Create our device wrapper
+    D3D11Device* d3d12_device = new D3D11Device(d3d11_device, d3d11_context, feature_level);
+    if (!d3d12_device) {
+        ERR("Failed to allocate device wrapper.\n");
+        return E_OUTOFMEMORY;
     }
 
-    // Create our device wrapper
-    Microsoft::WRL::ComPtr<D3D11Device> d3d12_device = 
-        new D3D11Device(d3d11_device, d3d11_context, feature_level);
-
-    hr = d3d12_device.CopyTo(reinterpret_cast<ID3D12Device**>(device));
+    // Query for the requested interface
+    hr = d3d12_device->QueryInterface(riid, device);
     if (FAILED(hr)) {
-        ERR("Failed to copy device pointer.\n");
+        ERR("Failed to query for requested interface.\n");
+        d3d12_device->Release();
         return hr;
     }
 
@@ -78,23 +93,43 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
 
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid, void** ppvObject) {
+    TRACE("D3D11Device::QueryInterface called for %s, %p\n", debugstr_guid(&riid).c_str(), ppvObject);
     if (!ppvObject) {
         return E_POINTER;
     }
 
-    if (riid == __uuidof(ID3D12Device2) || 
-        riid == __uuidof(ID3D12Device) || 
-        riid == __uuidof(IUnknown)) {
-        AddRef();
-        *ppvObject = this;
-        return S_OK;
+    *ppvObject = nullptr;
+
+    if (IsEqualGUID(riid, IID_IUnknown)) {
+        TRACE("Returning IUnknown interface\n");
+        *ppvObject = static_cast<ID3D12Device2*>(this);
+    } else if (IsEqualGUID(riid, IID_ID3D12Object)) {
+        TRACE("Returning ID3D12Object interface\n");
+        *ppvObject = static_cast<ID3D12Device2*>(this);
+    } else if (IsEqualGUID(riid, IID_ID3D12Device)) {
+        TRACE("Returning ID3D12Device interface\n");
+        *ppvObject = static_cast<ID3D12Device2*>(this);
+    } else if (IsEqualGUID(riid, IID_ID3D12Device1)) {
+        TRACE("Returning ID3D12Device1 interface\n");
+        *ppvObject = static_cast<ID3D12Device2*>(this);
+    } else if (IsEqualGUID(riid, IID_ID3D12Device2)) {
+        TRACE("Returning ID3D12Device2 interface\n");
+        *ppvObject = static_cast<ID3D12Device2*>(this);
+    } else if (IsEqualGUID(riid, __uuidof(ID3D12DebugDevice))) {
+        TRACE("Returning ID3D12DebugDevice interface\n");
+        *ppvObject = static_cast<ID3D12DebugDevice*>(this);
+    } else {
+        WARN("Unknown interface %s requested.\n", debugstr_guid(&riid).c_str());
+        return E_NOINTERFACE;
     }
 
-    WARN("Unknown interface %s.\n", debugstr_guid(&riid).c_str());
-    return E_NOINTERFACE;
+    AddRef();
+    TRACE("D3D11Device::QueryInterface returning interface %s\n", debugstr_guid(&riid).c_str());
+    return S_OK;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Device::AddRef() {
+    TRACE("D3D11Device::AddRef called");
     return InterlockedIncrement(&m_refCount);
 }
 
@@ -221,10 +256,91 @@ UINT STDMETHODCALLTYPE D3D11Device::GetDescriptorHandleIncrementSize(
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CheckFeatureSupport(
-    D3D12_FEATURE Feature, void* pFeatureSupportData,
+    D3D12_FEATURE Feature,
+    void* pFeatureSupportData,
     UINT FeatureSupportDataSize) {
-    TRACE("(%d, %p, %u)\n", Feature, pFeatureSupportData, FeatureSupportDataSize);
-    return E_NOTIMPL;
+    
+    TRACE("CheckFeatureSupport called\n");
+    TRACE("  Feature: %d\n", Feature);
+    TRACE("  DataSize: %d\n", FeatureSupportDataSize);
+    TRACE("  pFeatureSupportData: %p\n", pFeatureSupportData);
+
+    if (!pFeatureSupportData) {
+        ERR("Invalid feature support data pointer\n");
+        return E_INVALIDARG;
+    }
+
+    // Convert D3D12 feature enum to our internal enum
+    DXII_FEATURE dxiiFeature = static_cast<DXII_FEATURE>(Feature);
+    TRACE("  Internal feature: %d\n", dxiiFeature);
+
+    switch (dxiiFeature) {
+        case DXII_FEATURE_D3D12_OPTIONS: {
+            TRACE("  Reporting D3D11-compatible D3D12 Options features\n");
+            if (FeatureSupportDataSize != sizeof(DXII_FEATURE_DATA_D3D12_OPTIONS))
+                return E_INVALIDARG;
+
+            auto* data = static_cast<DXII_FEATURE_DATA_D3D12_OPTIONS*>(pFeatureSupportData);
+            data->DoublePrecisionFloatShaderOps = FALSE;
+            data->OutputMergerLogicOp = TRUE;
+            data->MinPrecisionSupport = D3D12_SHADER_MIN_PRECISION_SUPPORT_10_BIT;
+            data->TiledResourcesTier = D3D12_TILED_RESOURCES_TIER_1;
+            data->ResourceBindingTier = D3D12_RESOURCE_BINDING_TIER_1;
+            data->PSSpecifiedStencilRefSupported = TRUE;
+            data->TypedUAVLoadAdditionalFormats = TRUE;
+            data->ROVsSupported = FALSE;
+            data->ConservativeRasterizationTier = D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED;
+            data->MaxGPUVirtualAddressBitsPerResource = 40;
+            data->StandardSwizzle64KBSupported = FALSE;
+            data->CrossNodeSharingTier = D3D12_CROSS_NODE_SHARING_TIER_NOT_SUPPORTED;
+            data->CrossAdapterRowMajorTextureSupported = FALSE;
+            data->VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation = TRUE;
+            data->ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_1;
+            TRACE("  Reporting D3D11-compatible D3D12 Options features\n");
+            return S_OK;
+        }
+
+        case DXII_FEATURE_SHADER_CACHE: {
+            TRACE("  Reporting basic shader cache support\n");
+            if (FeatureSupportDataSize != sizeof(DXII_FEATURE_DATA_SHADER_CACHE))
+                return E_INVALIDARG;
+
+            auto* data = static_cast<DXII_FEATURE_DATA_SHADER_CACHE*>(pFeatureSupportData);
+            data->SupportFlags = 1; // Basic shader cache support
+            TRACE("  Reporting basic shader cache support\n");
+            return S_OK;
+        }
+
+        case DXII_FEATURE_OPTIONS1: {
+            TRACE("  Reporting D3D11-compatible D3D12 Options1 features\n");
+            if (FeatureSupportDataSize != sizeof(DXII_FEATURE_DATA_OPTIONS1))
+                return E_INVALIDARG;
+
+            auto* data = static_cast<DXII_FEATURE_DATA_OPTIONS1*>(pFeatureSupportData);
+            data->WaveOps = TRUE;
+            data->WaveLaneCountMin = 32;
+            data->WaveLaneCountMax = 32;
+            data->TotalLaneCount = 32;
+            data->ExpandedComputeResourceStates = TRUE;
+            data->Int64ShaderOps = TRUE;
+            TRACE("  Reporting D3D11-compatible D3D12 Options1 features\n");
+            return S_OK;
+        }
+
+        case DXII_FEATURE_SHADER_MODEL: {
+            if (FeatureSupportDataSize != sizeof(DXII_FEATURE_DATA_SHADER_MODEL))
+                return E_INVALIDARG;
+
+            auto* data = static_cast<DXII_FEATURE_DATA_SHADER_MODEL*>(pFeatureSupportData);
+            data->HighestShaderModel = 0x50; // Shader Model 5.0
+            TRACE("  Reporting Shader Model 5.0 support\n");
+            return S_OK;
+        }
+
+        default:
+            TRACE("  Unsupported feature: %d\n", Feature);
+            return E_NOTIMPL;
+    }
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateRootSignature(
@@ -397,7 +513,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateFence(
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::GetDeviceRemovedReason() {
-    TRACE("()\n");
+    TRACE("D3D11Device::GetDeviceRemovedReason() called\n");
     return S_OK;
 }
 
@@ -468,7 +584,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePipelineState(
     const D3D12_PIPELINE_STATE_STREAM_DESC* pDesc,
     REFIID riid,
     void** ppPipelineState) {
-    WARN("Pipeline state streams are not supported.\n");
+    TRACE("D3D11Device::CreatePipelineState called with desc %p\n", pDesc);
     return E_NOTIMPL;
 }
 
@@ -478,7 +594,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePipelineLibrary(
     SIZE_T BlobLengthInBytes,
     REFIID riid,
     void** ppPipelineLibrary) {
-    WARN("Pipeline libraries are not supported.\n");
+    TRACE("D3D11Device::CreatePipelineLibrary called with blob %p, length %zu\n", pLibraryBlob, BlobLengthInBytes);
     return E_NOTIMPL;
 }
 
@@ -486,8 +602,26 @@ HRESULT STDMETHODCALLTYPE D3D11Device::SetResidencyPriority(
     UINT NumObjects,
     ID3D12Pageable* const* ppObjects,
     const D3D12_RESIDENCY_PRIORITY* pPriorities) {
-    WARN("Residency priorities are not supported.\n");
+    TRACE("D3D11Device::SetResidencyPriority called with %u objects\n", NumObjects);
     return E_NOTIMPL;
+}
+
+// ID3D12DebugDevice methods
+HRESULT STDMETHODCALLTYPE D3D11Device::SetFeatureMask(
+    D3D12_DEBUG_FEATURE Mask) {
+    TRACE("D3D11Device::SetFeatureMask called with mask %d\n", Mask);
+    return E_NOTIMPL;
+}
+
+D3D12_DEBUG_FEATURE STDMETHODCALLTYPE D3D11Device::GetFeatureMask() {
+    TRACE("D3D11Device::GetFeatureMask called\n");
+    return D3D12_DEBUG_FEATURE_NONE;
+}
+
+HRESULT STDMETHODCALLTYPE D3D11Device::ReportLiveDeviceObjects(
+    D3D12_RLDO_FLAGS Flags) {
+    TRACE("D3D11Device::ReportLiveDeviceObjects called with flags %d\n", Flags);
+    return S_OK;  // Pretend we reported
 }
 
 } // namespace dxiided

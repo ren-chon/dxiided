@@ -1,7 +1,7 @@
 CXX = x86_64-w64-mingw32-g++
 WINDRES = x86_64-w64-mingw32-windres
 
-CXXFLAGS = -O2 -g -Wall -Wextra -std=c++17 -DWIN32_LEAN_AND_MEAN -DWINVER=0x0A00
+CXXFLAGS = -O0 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -std=c++17 -DWIN32_LEAN_AND_MEAN -DWINVER=0x0A00 -DDEBUG
 LDFLAGS = -static -static-libgcc -static-libstdc++ -Wl,--enable-stdcall-fixup
 
 INCLUDES = -Iinclude

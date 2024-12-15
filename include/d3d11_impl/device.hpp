@@ -1,22 +1,23 @@
 #pragma once
 
+#include <atomic>
 #include <d3d11.h>
 #include <d3d12.h>
-#include <wrl/client.h>
-
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
 #include "common/debug.hpp"
 #include "d3d11_impl/command_queue.hpp"
+#include "d3d11_impl/device_features.hpp"
 
 namespace dxiided {
 
 class D3D11CommandList;
 class D3D11CommandQueue;
 
-class D3D11Device final : public ID3D12Device2 {
+// We only need to inherit from ID3D12Device2 since it already inherits from ID3D12Device1 and ID3D12Device
+class D3D11Device final : public ID3D12Device2, public ID3D12DebugDevice {
    public:
     static HRESULT Create(IUnknown* adapter,
                           D3D_FEATURE_LEVEL minimum_feature_level, REFIID riid,
@@ -202,21 +203,31 @@ class D3D11Device final : public ID3D12Device2 {
         D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags,
         HANDLE hEvent) override;
 
+    // ID3D12Device2 methods
     HRESULT STDMETHODCALLTYPE CreatePipelineState(
         const D3D12_PIPELINE_STATE_STREAM_DESC* pDesc,
         REFIID riid,
         void** ppPipelineState) override;
 
-    // ID3D12Device2 methods
     HRESULT STDMETHODCALLTYPE CreatePipelineLibrary(
         const void* pLibraryBlob,
         SIZE_T BlobLengthInBytes,
         REFIID riid,
         void** ppPipelineLibrary) override;
+
     HRESULT STDMETHODCALLTYPE SetResidencyPriority(
         UINT NumObjects,
         ID3D12Pageable* const* ppObjects,
         const D3D12_RESIDENCY_PRIORITY* pPriorities) override;
+
+    // ID3D12DebugDevice methods
+    HRESULT STDMETHODCALLTYPE SetFeatureMask(
+        D3D12_DEBUG_FEATURE Mask) override;
+
+    D3D12_DEBUG_FEATURE STDMETHODCALLTYPE GetFeatureMask() override;
+
+    HRESULT STDMETHODCALLTYPE ReportLiveDeviceObjects(
+        D3D12_RLDO_FLAGS Flags) override;
 
     // Helper methods
     ID3D11Device* GetD3D11Device() { return m_d3d11Device.Get(); }
