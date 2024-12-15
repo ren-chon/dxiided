@@ -6,8 +6,8 @@ namespace dxiided {
 
 // Static member initialization
 std::unordered_map<D3D11PipelineState::PipelineStateKey,
-                  Microsoft::WRL::ComPtr<D3D11PipelineState>,
-                  D3D11PipelineState::PipelineStateKeyHasher>
+                   Microsoft::WRL::ComPtr<D3D11PipelineState>,
+                   D3D11PipelineState::PipelineStateKeyHasher>
     D3D11PipelineState::s_pipelineStateCache;
 std::mutex D3D11PipelineState::s_cacheMutex;
 
@@ -23,14 +23,16 @@ HRESULT D3D11PipelineState::CreateGraphics(
 
     // Try to find cached state
     PipelineStateKey key = ComputeHash(pDesc);
-    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState = GetCachedState(key);
+    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState =
+        GetCachedState(key);
     if (cachedState) {
         return cachedState.CopyTo(
             reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
     }
 
     // Create new state
-    Microsoft::WRL::ComPtr<D3D11PipelineState> state = new D3D11PipelineState(device);
+    Microsoft::WRL::ComPtr<D3D11PipelineState> state =
+        new D3D11PipelineState(device);
     HRESULT hr = state->InitializeGraphics(pDesc);
     if (FAILED(hr)) {
         return hr;
@@ -39,7 +41,8 @@ HRESULT D3D11PipelineState::CreateGraphics(
     // Cache the new state
     CacheState(key, state);
 
-    return state.CopyTo(reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
+    return state.CopyTo(
+        reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
 }
 
 HRESULT D3D11PipelineState::CreateCompute(
@@ -54,14 +57,16 @@ HRESULT D3D11PipelineState::CreateCompute(
 
     // Try to find cached state
     PipelineStateKey key = ComputeHash(pDesc);
-    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState = GetCachedState(key);
+    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState =
+        GetCachedState(key);
     if (cachedState) {
         return cachedState.CopyTo(
             reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
     }
 
     // Create new state
-    Microsoft::WRL::ComPtr<D3D11PipelineState> state = new D3D11PipelineState(device);
+    Microsoft::WRL::ComPtr<D3D11PipelineState> state =
+        new D3D11PipelineState(device);
     HRESULT hr = state->InitializeCompute(pDesc);
     if (FAILED(hr)) {
         return hr;
@@ -70,7 +75,8 @@ HRESULT D3D11PipelineState::CreateCompute(
     // Cache the new state
     CacheState(key, state);
 
-    return state.CopyTo(reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
+    return state.CopyTo(
+        reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
 }
 
 Microsoft::WRL::ComPtr<D3D11PipelineState> D3D11PipelineState::GetCachedState(
@@ -93,60 +99,63 @@ void D3D11PipelineState::CacheState(
 D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
     PipelineStateKey key;
-    
+
     // Add all relevant fields to the hash
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->VS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->VS) + sizeof(pDesc->VS));
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->PS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->PS) + sizeof(pDesc->PS));
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->DS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->DS) + sizeof(pDesc->DS));
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->HS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->HS) + sizeof(pDesc->HS));
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->GS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->GS) + sizeof(pDesc->GS));
-    
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->VS),
+        reinterpret_cast<const uint8_t*>(&pDesc->VS) + sizeof(pDesc->VS));
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->PS),
+        reinterpret_cast<const uint8_t*>(&pDesc->PS) + sizeof(pDesc->PS));
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->DS),
+        reinterpret_cast<const uint8_t*>(&pDesc->DS) + sizeof(pDesc->DS));
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->HS),
+        reinterpret_cast<const uint8_t*>(&pDesc->HS) + sizeof(pDesc->HS));
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->GS),
+        reinterpret_cast<const uint8_t*>(&pDesc->GS) + sizeof(pDesc->GS));
+
     // Add input layout
     for (UINT i = 0; i < pDesc->InputLayout.NumElements; i++) {
         const auto& element = pDesc->InputLayout.pInputElementDescs[i];
-        key.hash.insert(key.hash.end(),
-                       reinterpret_cast<const uint8_t*>(&element),
-                       reinterpret_cast<const uint8_t*>(&element) + sizeof(element));
+        key.hash.insert(
+            key.hash.end(), reinterpret_cast<const uint8_t*>(&element),
+            reinterpret_cast<const uint8_t*>(&element) + sizeof(element));
     }
-    
+
     // Add other state objects
     key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->BlendState),
-                   reinterpret_cast<const uint8_t*>(&pDesc->BlendState) + sizeof(pDesc->BlendState));
+                    reinterpret_cast<const uint8_t*>(&pDesc->BlendState),
+                    reinterpret_cast<const uint8_t*>(&pDesc->BlendState) +
+                        sizeof(pDesc->BlendState));
     key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->RasterizerState),
-                   reinterpret_cast<const uint8_t*>(&pDesc->RasterizerState) + sizeof(pDesc->RasterizerState));
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->DepthStencilState),
-                   reinterpret_cast<const uint8_t*>(&pDesc->DepthStencilState) + sizeof(pDesc->DepthStencilState));
-    
+                    reinterpret_cast<const uint8_t*>(&pDesc->RasterizerState),
+                    reinterpret_cast<const uint8_t*>(&pDesc->RasterizerState) +
+                        sizeof(pDesc->RasterizerState));
+    key.hash.insert(
+        key.hash.end(),
+        reinterpret_cast<const uint8_t*>(&pDesc->DepthStencilState),
+        reinterpret_cast<const uint8_t*>(&pDesc->DepthStencilState) +
+            sizeof(pDesc->DepthStencilState));
+
     return key;
 }
 
 D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc) {
     PipelineStateKey key;
-    
+
     // For compute pipeline, we only need to hash the compute shader
-    key.hash.insert(key.hash.end(),
-                   reinterpret_cast<const uint8_t*>(&pDesc->CS),
-                   reinterpret_cast<const uint8_t*>(&pDesc->CS) + sizeof(pDesc->CS));
-    
+    key.hash.insert(
+        key.hash.end(), reinterpret_cast<const uint8_t*>(&pDesc->CS),
+        reinterpret_cast<const uint8_t*>(&pDesc->CS) + sizeof(pDesc->CS));
+
     return key;
 }
 
-D3D11PipelineState::D3D11PipelineState(D3D11Device* device)
-    : m_device(device) {
+D3D11PipelineState::D3D11PipelineState(D3D11Device* device) : m_device(device) {
     TRACE("%p\n", device);
 }
 
@@ -170,12 +179,12 @@ HRESULT D3D11PipelineState::InitializeGraphics(
         HRESULT hr;
         if (pDesc->GS.pShaderBytecode && pDesc->GS.BytecodeLength) {
             hr = CreateStreamOutputShader(&pDesc->StreamOutput,
-                                        pDesc->GS.pShaderBytecode,
-                                        pDesc->GS.BytecodeLength);
+                                          pDesc->GS.pShaderBytecode,
+                                          pDesc->GS.BytecodeLength);
         } else {
             hr = CreateStreamOutputShader(&pDesc->StreamOutput,
-                                        pDesc->VS.pShaderBytecode,
-                                        pDesc->VS.BytecodeLength);
+                                          pDesc->VS.pShaderBytecode,
+                                          pDesc->VS.BytecodeLength);
         }
         if (FAILED(hr)) {
             ERR("Failed to create stream output shader, hr %#x.\n", hr);
@@ -240,14 +249,15 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             d3d11Elem.Format = d3d12Elem.Format;
             d3d11Elem.InputSlot = d3d12Elem.InputSlot;
             d3d11Elem.AlignedByteOffset = d3d12Elem.AlignedByteOffset;
-            d3d11Elem.InputSlotClass =
-                static_cast<D3D11_INPUT_CLASSIFICATION>(d3d12Elem.InputSlotClass);
+            d3d11Elem.InputSlotClass = static_cast<D3D11_INPUT_CLASSIFICATION>(
+                d3d12Elem.InputSlotClass);
             d3d11Elem.InstanceDataStepRate = d3d12Elem.InstanceDataStepRate;
         }
 
         HRESULT hr = m_device->GetD3D11Device()->CreateInputLayout(
             inputElements.data(), pDesc->InputLayout.NumElements,
-            pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength, &m_inputLayout);
+            pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength,
+            &m_inputLayout);
         if (FAILED(hr)) {
             ERR("Failed to create input layout, hr %#x.\n", hr);
             return hr;
@@ -266,8 +276,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
         d3d11RT.SrcBlend = static_cast<D3D11_BLEND>(d3d12RT.SrcBlend);
         d3d11RT.DestBlend = static_cast<D3D11_BLEND>(d3d12RT.DestBlend);
         d3d11RT.BlendOp = static_cast<D3D11_BLEND_OP>(d3d12RT.BlendOp);
-        d3d11RT.SrcBlendAlpha =
-            static_cast<D3D11_BLEND>(d3d12RT.SrcBlendAlpha);
+        d3d11RT.SrcBlendAlpha = static_cast<D3D11_BLEND>(d3d12RT.SrcBlendAlpha);
         d3d11RT.DestBlendAlpha =
             static_cast<D3D11_BLEND>(d3d12RT.DestBlendAlpha);
         d3d11RT.BlendOpAlpha =
@@ -275,8 +284,8 @@ HRESULT D3D11PipelineState::InitializeGraphics(
         d3d11RT.RenderTargetWriteMask = d3d12RT.RenderTargetWriteMask;
     }
 
-    HRESULT hr = m_device->GetD3D11Device()->CreateBlendState(&blendDesc,
-                                                             &m_blendState);
+    HRESULT hr =
+        m_device->GetD3D11Device()->CreateBlendState(&blendDesc, &m_blendState);
     if (FAILED(hr)) {
         ERR("Failed to create blend state, hr %#x.\n", hr);
         return hr;
@@ -301,7 +310,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
         pDesc->RasterizerState.AntialiasedLineEnable;
 
     hr = m_device->GetD3D11Device()->CreateRasterizerState(&rasterizerDesc,
-                                                          &m_rasterizerState);
+                                                           &m_rasterizerState);
     if (FAILED(hr)) {
         ERR("Failed to create rasterizer state, hr %#x.\n", hr);
         return hr;
@@ -350,8 +359,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
 }
 
 HRESULT D3D11PipelineState::CreateStreamOutputShader(
-    const D3D12_STREAM_OUTPUT_DESC* pSODesc,
-    const void* pShaderBytecode,
+    const D3D12_STREAM_OUTPUT_DESC* pSODesc, const void* pShaderBytecode,
     SIZE_T BytecodeLength) {
     // Convert D3D12 stream output declarations to D3D11
     std::vector<D3D11_SO_DECLARATION_ENTRY> soDeclarations(pSODesc->NumEntries);
@@ -409,7 +417,7 @@ HRESULT D3D11PipelineState::InitializeCompute(
 
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::QueryInterface(REFIID riid,
-                                                            void** ppvObject) {
+                                                             void** ppvObject) {
     TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -443,15 +451,14 @@ ULONG STDMETHODCALLTYPE D3D11PipelineState::Release() {
 
 // ID3D12Object methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetPrivateData(REFGUID guid,
-                                                            UINT* pDataSize,
-                                                            void* pData) {
+                                                             UINT* pDataSize,
+                                                             void* pData) {
     TRACE("%s, %p, %p\n", debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_device->GetPrivateData(guid, pDataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateData(REFGUID guid,
-                                                            UINT DataSize,
-                                                            const void* pData) {
+HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateData(
+    REFGUID guid, UINT DataSize, const void* pData) {
     TRACE("%s, %u, %p\n", debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_device->SetPrivateData(guid, DataSize, pData);
 }
@@ -469,7 +476,7 @@ HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetName(LPCWSTR Name) {
 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetDevice(REFIID riid,
-                                                       void** ppvDevice) {
+                                                        void** ppvDevice) {
     TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }

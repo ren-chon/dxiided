@@ -6,8 +6,8 @@ namespace dxiided {
 
 // Static member initialization
 std::unordered_map<D3D11ResourceViewCache::ViewKey,
-                  Microsoft::WRL::ComPtr<IUnknown>,
-                  D3D11ResourceViewCache::ViewKeyHasher>
+                   Microsoft::WRL::ComPtr<IUnknown>,
+                   D3D11ResourceViewCache::ViewKeyHasher>
     D3D11ResourceViewCache::s_viewCache;
 std::mutex D3D11ResourceViewCache::s_cacheMutex;
 
@@ -87,7 +87,7 @@ D3D11ResourceViewCache::GetOrCreateSRV(
 
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
     HRESULT hr = device->CreateShaderResourceView(resource->GetD3D11Resource(),
-                                                desc, &srv);
+                                                  desc, &srv);
     if (FAILED(hr)) {
         ERR("Failed to create SRV, hr %#x.\n", hr);
         return nullptr;
@@ -120,7 +120,7 @@ D3D11ResourceViewCache::GetOrCreateRTV(
 
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
     HRESULT hr = device->CreateRenderTargetView(resource->GetD3D11Resource(),
-                                              desc, &rtv);
+                                                desc, &rtv);
     if (FAILED(hr)) {
         ERR("Failed to create RTV, hr %#x.\n", hr);
         return nullptr;
@@ -153,7 +153,7 @@ D3D11ResourceViewCache::GetOrCreateDSV(
 
     Microsoft::WRL::ComPtr<ID3D11DepthStencilView> dsv;
     HRESULT hr = device->CreateDepthStencilView(resource->GetD3D11Resource(),
-                                              desc, &dsv);
+                                                desc, &dsv);
     if (FAILED(hr)) {
         ERR("Failed to create DSV, hr %#x.\n", hr);
         return nullptr;
@@ -186,7 +186,7 @@ D3D11ResourceViewCache::GetOrCreateUAV(
 
     Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> uav;
     HRESULT hr = device->CreateUnorderedAccessView(resource->GetD3D11Resource(),
-                                                 desc, &uav);
+                                                   desc, &uav);
     if (FAILED(hr)) {
         ERR("Failed to create UAV, hr %#x.\n", hr);
         return nullptr;

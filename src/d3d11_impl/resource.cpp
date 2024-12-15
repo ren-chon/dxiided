@@ -5,12 +5,12 @@
 namespace dxiided {
 
 HRESULT D3D11Resource::Create(D3D11Device* device,
-                             const D3D12_HEAP_PROPERTIES* pHeapProperties,
-                             D3D12_HEAP_FLAGS HeapFlags,
-                             const D3D12_RESOURCE_DESC* pDesc,
-                             D3D12_RESOURCE_STATES InitialState,
-                             const D3D12_CLEAR_VALUE* pOptimizedClearValue,
-                             REFIID riid, void** ppvResource) {
+                              const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                              D3D12_HEAP_FLAGS HeapFlags,
+                              const D3D12_RESOURCE_DESC* pDesc,
+                              D3D12_RESOURCE_STATES InitialState,
+                              const D3D12_CLEAR_VALUE* pOptimizedClearValue,
+                              REFIID riid, void** ppvResource) {
     TRACE("%p, %p, %#x, %p, %#x, %p, %s, %p\n", device, pHeapProperties,
           HeapFlags, pDesc, InitialState, pOptimizedClearValue,
           debugstr_guid(&riid).c_str(), ppvResource);
@@ -19,9 +19,8 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         return E_INVALIDARG;
     }
 
-    Microsoft::WRL::ComPtr<D3D11Resource> resource =
-        new D3D11Resource(device, pHeapProperties, HeapFlags, pDesc,
-                         InitialState);
+    Microsoft::WRL::ComPtr<D3D11Resource> resource = new D3D11Resource(
+        device, pHeapProperties, HeapFlags, pDesc, InitialState);
 
     if (!resource->GetD3D11Resource()) {
         ERR("Failed to create D3D11 resource.\n");
@@ -54,11 +53,10 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             bufferDesc.Usage = usage;
             bufferDesc.BindFlags = bindFlags;
             bufferDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC)
-                    ? D3D11_CPU_ACCESS_WRITE
-                    : (usage == D3D11_USAGE_STAGING)
-                          ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                          : 0;
+                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                : (usage == D3D11_USAGE_STAGING)
+                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                    : 0;
             bufferDesc.MiscFlags = 0;
             bufferDesc.StructureByteStride = 0;
 
@@ -81,11 +79,10 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
             texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC)
-                    ? D3D11_CPU_ACCESS_WRITE
-                    : (usage == D3D11_USAGE_STAGING)
-                          ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                          : 0;
+                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                : (usage == D3D11_USAGE_STAGING)
+                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                    : 0;
             texDesc.MiscFlags = 0;
 
             Microsoft::WRL::ComPtr<ID3D11Texture1D> texture;
@@ -109,11 +106,10 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
             texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC)
-                    ? D3D11_CPU_ACCESS_WRITE
-                    : (usage == D3D11_USAGE_STAGING)
-                          ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                          : 0;
+                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                : (usage == D3D11_USAGE_STAGING)
+                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                    : 0;
             texDesc.MiscFlags = GetMiscFlags(pDesc);
 
             Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
@@ -136,11 +132,10 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
             texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC)
-                    ? D3D11_CPU_ACCESS_WRITE
-                    : (usage == D3D11_USAGE_STAGING)
-                          ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                          : 0;
+                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                : (usage == D3D11_USAGE_STAGING)
+                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                    : 0;
             texDesc.MiscFlags = GetMiscFlags(pDesc);
 
             Microsoft::WRL::ComPtr<ID3D11Texture3D> texture;
@@ -161,26 +156,26 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
 
 UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
     UINT flags = 0;
-    
+
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
         flags |= D3D11_RESOURCE_MISC_SHARED;
     }
-    
+
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
         pDesc->DepthOrArraySize == 6) {
         flags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
     }
-    
+
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET &&
         pDesc->MipLevels > 1) {
         flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
     }
-    
+
     return flags;
 }
 
 void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
-                               D3D12_RESOURCE_STATES newState) {
+                                 D3D12_RESOURCE_STATES newState) {
     TRACE("%p, %#x -> %#x\n", context, m_currentState, newState);
 
     // No need to transition if states are the same
@@ -225,7 +220,7 @@ void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
 }
 
 void D3D11Resource::AliasingBarrier(ID3D11DeviceContext* context,
-                                   D3D11Resource* pResourceAfter) {
+                                    D3D11Resource* pResourceAfter) {
     TRACE("%p, %p\n", context, pResourceAfter);
 
     // Ensure all operations on both resources are completed
@@ -243,15 +238,17 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_DEPTH_STENCIL);
     }
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
+        flags =
+            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
     }
     if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
+        flags =
+            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
     }
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER |
-                                           D3D11_BIND_INDEX_BUFFER |
-                                           D3D11_BIND_CONSTANT_BUFFER);
+                                             D3D11_BIND_INDEX_BUFFER |
+                                             D3D11_BIND_CONSTANT_BUFFER);
     }
 
     return flags;
@@ -359,8 +356,8 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::SetPrivateData(REFGUID guid,
     return m_resource->SetPrivateData(guid, DataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::SetPrivateDataInterface(
-    REFGUID guid, const IUnknown* pData) {
+HRESULT STDMETHODCALLTYPE
+D3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
     TRACE("%s, %p\n", debugstr_guid(&guid).c_str(), pData);
     return m_resource->SetPrivateDataInterface(guid, pData);
 }
@@ -386,9 +383,9 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
     TRACE("%u, %p, %p\n", Subresource, pReadRange, ppData);
 
     D3D11_MAPPED_SUBRESOURCE mappedResource;
-    HRESULT hr = m_device->GetD3D11Context()->Map(
-        m_resource.Get(), Subresource, D3D11_MAP_WRITE_DISCARD, 0,
-        &mappedResource);
+    HRESULT hr = m_device->GetD3D11Context()->Map(m_resource.Get(), Subresource,
+                                                  D3D11_MAP_WRITE_DISCARD, 0,
+                                                  &mappedResource);
 
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
@@ -403,8 +400,8 @@ void STDMETHODCALLTYPE D3D11Resource::Unmap(UINT Subresource,
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
-D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(
-    D3D12_RESOURCE_DESC* desc) {
+D3D12_RESOURCE_DESC* STDMETHODCALLTYPE
+D3D11Resource::GetDesc(D3D12_RESOURCE_DESC* desc) {
     TRACE("(%p)\n", desc);
     *desc = m_desc;
     return desc;
@@ -423,8 +420,9 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::WriteToSubresource(
           SrcRowPitch, SrcDepthPitch);
 
     m_device->GetD3D11Context()->UpdateSubresource(
-        m_resource.Get(), DstSubresource, reinterpret_cast<const D3D11_BOX*>(pDstBox),
-        pSrcData, SrcRowPitch, SrcDepthPitch);
+        m_resource.Get(), DstSubresource,
+        reinterpret_cast<const D3D11_BOX*>(pDstBox), pSrcData, SrcRowPitch,
+        SrcDepthPitch);
 
     return S_OK;
 }

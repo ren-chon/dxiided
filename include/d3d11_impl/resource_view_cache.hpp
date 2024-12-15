@@ -51,7 +51,7 @@ class D3D11ResourceViewCache {
 
    private:
     static std::unordered_map<ViewKey, Microsoft::WRL::ComPtr<IUnknown>,
-                             ViewKeyHasher>
+                              ViewKeyHasher>
         s_viewCache;
     static std::mutex s_cacheMutex;
 };

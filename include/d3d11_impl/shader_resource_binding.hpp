@@ -25,8 +25,7 @@ class D3D11ShaderResourceBinding {
 
     struct SamplerKeyHasher {
         size_t operator()(const SamplerKey& key) const {
-            const uint8_t* data =
-                reinterpret_cast<const uint8_t*>(&key.desc);
+            const uint8_t* data = reinterpret_cast<const uint8_t*>(&key.desc);
             size_t hash = 0;
             for (size_t i = 0; i < sizeof(key.desc); i++) {
                 hash = hash * 31 + data[i];
@@ -69,16 +68,16 @@ class D3D11ShaderResourceBinding {
     };
 
     static void ApplyBindings(ID3D11DeviceContext* context,
-                            const BindingState& state);
+                              const BindingState& state);
 
    private:
     static std::unordered_map<SamplerKey,
-                             Microsoft::WRL::ComPtr<ID3D11SamplerState>,
-                             SamplerKeyHasher>
+                              Microsoft::WRL::ComPtr<ID3D11SamplerState>,
+                              SamplerKeyHasher>
         s_samplerCache;
     static std::unordered_map<ConstantBufferKey,
-                             Microsoft::WRL::ComPtr<ID3D11Buffer>,
-                             ConstantBufferKeyHasher>
+                              Microsoft::WRL::ComPtr<ID3D11Buffer>,
+                              ConstantBufferKeyHasher>
         s_constantBufferCache;
     static std::mutex s_cacheMutex;
 };

@@ -4,26 +4,27 @@ namespace dxiided {
 
 // Static member initialization
 std::unordered_map<D3D11ShaderResourceBinding::SamplerKey,
-                  Microsoft::WRL::ComPtr<ID3D11SamplerState>,
-                  D3D11ShaderResourceBinding::SamplerKeyHasher>
+                   Microsoft::WRL::ComPtr<ID3D11SamplerState>,
+                   D3D11ShaderResourceBinding::SamplerKeyHasher>
     D3D11ShaderResourceBinding::s_samplerCache;
 
 std::unordered_map<D3D11ShaderResourceBinding::ConstantBufferKey,
-                  Microsoft::WRL::ComPtr<ID3D11Buffer>,
-                  D3D11ShaderResourceBinding::ConstantBufferKeyHasher>
+                   Microsoft::WRL::ComPtr<ID3D11Buffer>,
+                   D3D11ShaderResourceBinding::ConstantBufferKeyHasher>
     D3D11ShaderResourceBinding::s_constantBufferCache;
 
 std::mutex D3D11ShaderResourceBinding::s_cacheMutex;
 
 Microsoft::WRL::ComPtr<ID3D11SamplerState>
 D3D11ShaderResourceBinding::GetOrCreateSampler(ID3D11Device* device,
-                                              const D3D11_SAMPLER_DESC* desc) {
+                                               const D3D11_SAMPLER_DESC* desc) {
     SamplerKey key;
     key.desc = *desc;
 
     static std::mutex mutex;
-    static std::unordered_map<SamplerKey, Microsoft::WRL::ComPtr<ID3D11SamplerState>,
-                             SamplerKeyHasher>
+    static std::unordered_map<SamplerKey,
+                              Microsoft::WRL::ComPtr<ID3D11SamplerState>,
+                              SamplerKeyHasher>
         cache;
 
     std::lock_guard<std::mutex> lock(mutex);
@@ -46,12 +47,12 @@ D3D11ShaderResourceBinding::GetOrCreateSampler(ID3D11Device* device,
 
 Microsoft::WRL::ComPtr<ID3D11Buffer>
 D3D11ShaderResourceBinding::GetOrCreateConstantBuffer(ID3D11Device* device,
-                                                    const void* data,
-                                                    size_t size) {
+                                                      const void* data,
+                                                      size_t size) {
     ConstantBufferKey key;
     key.size = size;
     key.data.assign(static_cast<const uint8_t*>(data),
-                   static_cast<const uint8_t*>(data) + size);
+                    static_cast<const uint8_t*>(data) + size);
 
     std::lock_guard<std::mutex> lock(s_cacheMutex);
 
@@ -81,7 +82,7 @@ D3D11ShaderResourceBinding::GetOrCreateConstantBuffer(ID3D11Device* device,
 }
 
 void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
-                                             const BindingState& state) {
+                                               const BindingState& state) {
     // Set shader resources
     if (!state.srvs.empty()) {
         std::vector<ID3D11ShaderResourceView*> srvPtrs(state.srvs.size());
@@ -89,17 +90,17 @@ void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
             srvPtrs[i] = state.srvs[i].Get();
         }
         context->VSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
         context->PSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
         context->GSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
         context->HSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
         context->DSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
         context->CSSetShaderResources(0, static_cast<UINT>(srvPtrs.size()),
-                                    srvPtrs.data());
+                                      srvPtrs.data());
     }
 
     // Set UAVs
@@ -109,7 +110,7 @@ void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
             uavPtrs[i] = state.uavs[i].Get();
         }
         context->CSSetUnorderedAccessViews(0, static_cast<UINT>(uavPtrs.size()),
-                                         uavPtrs.data(), nullptr);
+                                           uavPtrs.data(), nullptr);
     }
 
     // Set samplers
@@ -119,17 +120,17 @@ void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
             samplerPtrs[i] = state.samplers[i].Get();
         }
         context->VSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
         context->PSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
         context->GSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
         context->HSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
         context->DSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
         context->CSSetSamplers(0, static_cast<UINT>(samplerPtrs.size()),
-                             samplerPtrs.data());
+                               samplerPtrs.data());
     }
 
     // Set constant buffers
@@ -139,17 +140,17 @@ void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
             bufferPtrs[i] = state.constantBuffers[i].Get();
         }
         context->VSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
         context->PSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
         context->GSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
         context->HSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
         context->DSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
         context->CSSetConstantBuffers(0, static_cast<UINT>(bufferPtrs.size()),
-                                    bufferPtrs.data());
+                                      bufferPtrs.data());
     }
 }
 

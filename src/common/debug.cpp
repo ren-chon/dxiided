@@ -4,8 +4,8 @@
 #include <array>
 #include <cstdarg>
 #include <ctime>
-#include <iomanip>
 #include <fstream>
+#include <iomanip>
 
 namespace dxiided {
 namespace debug {
@@ -26,7 +26,7 @@ Logger::~Logger() {
 
 void Logger::Initialize() {
     OpenLogFile();
-    
+
     if (const char* env_var = std::getenv(DEBUG_ENV)) {
         std::string debug_str(env_var);
         for (size_t i = 0; i < DEBUG_LEVEL_NAMES.size(); i++) {
@@ -42,9 +42,9 @@ void Logger::OpenLogFile() {
     if (m_logFile.is_open()) {
         auto now = std::time(nullptr);
         auto tm = *std::localtime(&now);
-        m_logFile << "\n=== Log started at " 
-                 << std::put_time(&tm, "%Y-%m-%d %H:%M:%S")
-                 << " ===\n" << std::endl;
+        m_logFile << "\n=== Log started at "
+                  << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << " ===\n"
+                  << std::endl;
     }
 }
 
@@ -52,12 +52,13 @@ void Logger::WriteToOutputs(const char* message) {
     if (m_logFile.is_open()) {
         auto now = std::time(nullptr);
         auto tm = *std::localtime(&now);
-        m_logFile << std::put_time(&tm, "%H:%M:%S") << " " << message << std::endl;
+        m_logFile << std::put_time(&tm, "%H:%M:%S") << " " << message
+                  << std::endl;
     }
-    
+
     OutputDebugStringA(message);
     OutputDebugStringA("\n");
-    
+
     // Also write to stdout if available
     fprintf(stdout, "%s\n", message);
     fflush(stdout);

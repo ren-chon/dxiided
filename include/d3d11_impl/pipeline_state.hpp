@@ -5,9 +5,9 @@
 #include <wrl/client.h>
 
 #include <memory>
-#include <vector>
-#include <unordered_map>
 #include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include "common/debug.hpp"
 
@@ -18,30 +18,26 @@ class D3D11Device;
 class D3D11PipelineState final : public ID3D12PipelineState {
    public:
     static HRESULT CreateGraphics(
-        D3D11Device* device,
-        const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
-        REFIID riid,
-        void** ppPipelineState);
+        D3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
+        REFIID riid, void** ppPipelineState);
 
-    static HRESULT CreateCompute(
-        D3D11Device* device,
-        const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
-        REFIID riid,
-        void** ppPipelineState);
+    static HRESULT CreateCompute(D3D11Device* device,
+                                 const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
+                                 REFIID riid, void** ppPipelineState);
 
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
-                                            void** ppvObject) override;
+                                             void** ppvObject) override;
     ULONG STDMETHODCALLTYPE AddRef() override;
     ULONG STDMETHODCALLTYPE Release() override;
 
     // ID3D12Object methods
     HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID guid, UINT* pDataSize,
-                                            void* pData) override;
+                                             void* pData) override;
     HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID guid, UINT DataSize,
-                                            const void* pData) override;
-    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(
-        REFGUID guid, const IUnknown* pData) override;
+                                             const void* pData) override;
+    HRESULT STDMETHODCALLTYPE
+    SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) override;
     HRESULT STDMETHODCALLTYPE SetName(LPCWSTR Name) override;
 
     // ID3D12DeviceChild methods
@@ -65,22 +61,20 @@ class D3D11PipelineState final : public ID3D12PipelineState {
         size_t operator()(const PipelineStateKey& key) const {
             return std::hash<std::string>()(
                 std::string(reinterpret_cast<const char*>(key.hash.data()),
-                          key.hash.size()));
+                            key.hash.size()));
         }
     };
 
     static Microsoft::WRL::ComPtr<D3D11PipelineState> GetCachedState(
         const PipelineStateKey& key);
     static void CacheState(const PipelineStateKey& key,
-                          Microsoft::WRL::ComPtr<D3D11PipelineState> state);
+                           Microsoft::WRL::ComPtr<D3D11PipelineState> state);
 
    private:
     D3D11PipelineState(D3D11Device* device);
 
-    HRESULT InitializeGraphics(
-        const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc);
-    HRESULT InitializeCompute(
-        const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc);
+    HRESULT InitializeGraphics(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc);
+    HRESULT InitializeCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc);
 
     D3D11Device* m_device;
     LONG m_refCount{1};
@@ -107,18 +101,18 @@ class D3D11PipelineState final : public ID3D12PipelineState {
     UINT m_numSOStrides;
     UINT m_rasterizedStream;
 
-    HRESULT CreateStreamOutputShader(
-        const D3D12_STREAM_OUTPUT_DESC* pSODesc,
-        const void* pShaderBytecode,
-        SIZE_T BytecodeLength);
+    HRESULT CreateStreamOutputShader(const D3D12_STREAM_OUTPUT_DESC* pSODesc,
+                                     const void* pShaderBytecode,
+                                     SIZE_T BytecodeLength);
 
     static PipelineStateKey ComputeHash(
         const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc);
     static PipelineStateKey ComputeHash(
         const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc);
 
-    static std::unordered_map<PipelineStateKey, Microsoft::WRL::ComPtr<D3D11PipelineState>,
-                             PipelineStateKeyHasher>
+    static std::unordered_map<PipelineStateKey,
+                              Microsoft::WRL::ComPtr<D3D11PipelineState>,
+                              PipelineStateKeyHasher>
         s_pipelineStateCache;
     static std::mutex s_cacheMutex;
 };

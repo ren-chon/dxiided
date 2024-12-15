@@ -6,8 +6,8 @@
 namespace dxiided {
 
 HRESULT D3D11CommandQueue::Create(D3D11Device* device,
-                                 const D3D12_COMMAND_QUEUE_DESC* desc,
-                                 REFIID riid, void** command_queue) {
+                                  const D3D12_COMMAND_QUEUE_DESC* desc,
+                                  REFIID riid, void** command_queue) {
     TRACE("%p, %p, %s, %p\n", device, desc, debugstr_guid(&riid).c_str(),
           command_queue);
 
@@ -22,18 +22,18 @@ HRESULT D3D11CommandQueue::Create(D3D11Device* device,
 }
 
 D3D11CommandQueue::D3D11CommandQueue(D3D11Device* device,
-                                    const D3D12_COMMAND_QUEUE_DESC* desc)
+                                     const D3D12_COMMAND_QUEUE_DESC* desc)
     : m_device(device), m_desc(*desc) {
     TRACE("%p, Type=%d, Priority=%d, Flags=%d\n", device, desc->Type,
           desc->Priority, desc->Flags);
 
-    m_immediateContext = Microsoft::WRL::ComPtr<ID3D11DeviceContext>(
-        device->GetD3D11Context());
+    m_immediateContext =
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext>(device->GetD3D11Context());
 }
 
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::QueryInterface(REFIID riid,
-                                                           void** ppvObject) {
+                                                            void** ppvObject) {
     TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -67,15 +67,15 @@ ULONG STDMETHODCALLTYPE D3D11CommandQueue::Release() {
 
 // ID3D12Object methods
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetPrivateData(REFGUID guid,
-                                                           UINT* pDataSize,
-                                                           void* pData) {
+                                                            UINT* pDataSize,
+                                                            void* pData) {
     TRACE("%s, %p, %p\n", debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_immediateContext->GetPrivateData(guid, pDataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::SetPrivateData(REFGUID guid,
-                                                           UINT DataSize,
-                                                           const void* pData) {
+                                                            UINT DataSize,
+                                                            const void* pData) {
     TRACE("%s, %u, %p\n", debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_immediateContext->SetPrivateData(guid, DataSize, pData);
 }
@@ -95,7 +95,7 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::SetName(LPCWSTR Name) {
 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetDevice(REFIID riid,
-                                                      void** ppvDevice) {
+                                                       void** ppvDevice) {
     TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
@@ -121,8 +121,7 @@ void STDMETHODCALLTYPE D3D11CommandQueue::CopyTileMappings(
     const D3D12_TILED_RESOURCE_COORDINATE* pDstRegionStartCoordinate,
     ID3D12Resource* pSrcResource,
     const D3D12_TILED_RESOURCE_COORDINATE* pSrcRegionStartCoordinate,
-    const D3D12_TILE_REGION_SIZE* pRegionSize,
-    D3D12_TILE_MAPPING_FLAGS Flags) {
+    const D3D12_TILE_REGION_SIZE* pRegionSize, D3D12_TILE_MAPPING_FLAGS Flags) {
     TRACE("%p, %p, %p, %p, %p, %d\n", pDstResource, pDstRegionStartCoordinate,
           pSrcResource, pSrcRegionStartCoordinate, pRegionSize, Flags);
     // D3D11 doesn't support tiled resources in the same way
@@ -142,16 +141,16 @@ void STDMETHODCALLTYPE D3D11CommandQueue::ExecuteCommandLists(
 }
 
 void STDMETHODCALLTYPE D3D11CommandQueue::SetMarker(UINT Metadata,
-                                                   const void* pData,
-                                                   UINT Size) {
+                                                    const void* pData,
+                                                    UINT Size) {
     TRACE("%u, %p, %u\n", Metadata, pData, Size);
     // TODO: Implement debug markers
     FIXME("Debug markers not implemented.\n");
 }
 
 void STDMETHODCALLTYPE D3D11CommandQueue::BeginEvent(UINT Metadata,
-                                                    const void* pData,
-                                                    UINT Size) {
+                                                     const void* pData,
+                                                     UINT Size) {
     TRACE("%u, %p, %u\n", Metadata, pData, Size);
     // TODO: Implement debug events
     FIXME("Debug events not implemented.\n");
@@ -164,7 +163,7 @@ void STDMETHODCALLTYPE D3D11CommandQueue::EndEvent() {
 }
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::Signal(ID3D12Fence* pFence,
-                                                   UINT64 Value) {
+                                                    UINT64 Value) {
     TRACE("%p, %llu\n", pFence, Value);
     // TODO: Implement fence synchronization
     FIXME("Fence synchronization not implemented.\n");
@@ -172,18 +171,17 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::Signal(ID3D12Fence* pFence,
 }
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::Wait(ID3D12Fence* pFence,
-                                                 UINT64 Value) {
+                                                  UINT64 Value) {
     TRACE("%p, %llu\n", pFence, Value);
     // TODO: Implement fence synchronization
     FIXME("Fence synchronization not implemented.\n");
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetTimestampFrequency(
-    UINT64* pFrequency) {
+HRESULT STDMETHODCALLTYPE
+D3D11CommandQueue::GetTimestampFrequency(UINT64* pFrequency) {
     TRACE("%p\n", pFrequency);
-    if (!pFrequency)
-        return E_INVALIDARG;
+    if (!pFrequency) return E_INVALIDARG;
 
     // D3D11 doesn't expose timestamp frequency directly
     // Use a reasonable default for now
@@ -198,8 +196,8 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetClockCalibration(
     return E_NOTIMPL;
 }
 
-D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE D3D11CommandQueue::GetDesc(
-    D3D12_COMMAND_QUEUE_DESC* desc) {
+D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE
+D3D11CommandQueue::GetDesc(D3D12_COMMAND_QUEUE_DESC* desc) {
     TRACE("%p\n", desc);
     if (desc) {
         *desc = m_desc;
