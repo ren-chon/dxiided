@@ -1,15 +1,15 @@
 #include "d3d11_impl/command_queue.hpp"
-
 #include "d3d11_impl/command_list.hpp"
 #include "d3d11_impl/device.hpp"
+#include "d3d11_impl/swap_chain.hpp"
 
 namespace dxiided {
 
 HRESULT D3D11CommandQueue::Create(D3D11Device* device,
                                   const D3D12_COMMAND_QUEUE_DESC* desc,
                                   REFIID riid, void** command_queue) {
-    TRACE("D3D11CommandQueue::Create %p, %p, %s, %p\n", device, desc, debugstr_guid(&riid).c_str(),
-          command_queue);
+    TRACE("D3D11CommandQueue::Create %p, %p, %s, %p\n", device, desc,
+          debugstr_guid(&riid).c_str(), command_queue);
 
     if (!device || !desc || !command_queue) {
         return E_INVALIDARG;
@@ -24,8 +24,10 @@ HRESULT D3D11CommandQueue::Create(D3D11Device* device,
 D3D11CommandQueue::D3D11CommandQueue(D3D11Device* device,
                                      const D3D12_COMMAND_QUEUE_DESC* desc)
     : m_device(device), m_desc(*desc) {
-    TRACE("D3D11CommandQueue::D3D11CommandQueue called %p, Type=%d, Priority=%d, Flags=%d\n", device, desc->Type,
-          desc->Priority, desc->Flags);
+    TRACE(
+        "D3D11CommandQueue::D3D11CommandQueue called %p, Type=%d, Priority=%d, "
+        "Flags=%d\n",
+        device, desc->Type, desc->Priority, desc->Flags);
 
     m_immediateContext =
         Microsoft::WRL::ComPtr<ID3D11DeviceContext>(device->GetD3D11Context());
@@ -41,19 +43,13 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::QueryInterface(REFIID riid,
         return E_POINTER;
     }
 
-    static const GUID IID_IWineDXGISwapChainFactory = 
-        {0x53cb4ff0, 0xc25a, 0x4164, {0xa8, 0x91, 0x0e, 0x83, 0xdb, 0x0a, 0x7a, 0xac}};
-
-    if (riid == __uuidof(IUnknown) ||
-        riid == __uuidof(ID3D12Object) ||
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(ID3D12Object) ||
         riid == __uuidof(ID3D12DeviceChild) ||
         riid == __uuidof(ID3D12CommandQueue)) {
         *ppvObject = this;
         AddRef();
         return S_OK;
     }
-    
-    // Support Wine/DXVK swapchain factory interface
     if (riid == IID_IWineDXGISwapChainFactory) {
         TRACE("Returning IWineDXGISwapChainFactory interface\n");
         *ppvObject = static_cast<IWineDXGISwapChainFactory*>(this);
@@ -68,13 +64,15 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::QueryInterface(REFIID riid,
 
 ULONG STDMETHODCALLTYPE D3D11CommandQueue::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
-    TRACE("D3D11CommandQueue::AddRef %p increasing refcount to %u.\n", this, ref);
+    TRACE("D3D11CommandQueue::AddRef %p increasing refcount to %u.\n", this,
+          ref);
     return ref;
 }
 
 ULONG STDMETHODCALLTYPE D3D11CommandQueue::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
-    TRACE("D3D11CommandQueue::Release %p decreasing refcount to %u.\n", this, ref);
+    TRACE("D3D11CommandQueue::Release %p decreasing refcount to %u.\n", this,
+          ref);
     if (ref == 0) {
         delete this;
     }
@@ -106,32 +104,35 @@ HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetPrivateData(REFGUID guid,
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::SetPrivateData(REFGUID guid,
                                                             UINT DataSize,
                                                             const void* pData) {
-    TRACE("D3D11CommandQueue::SetPrivateData %s, %u, %p\n", debugstr_guid(&guid).c_str(), DataSize, pData);
+    TRACE("D3D11CommandQueue::SetPrivateData %s, %u, %p\n",
+          debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_immediateContext->SetPrivateData(guid, DataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::SetPrivateDataInterface(
     REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11CommandQueue::SetPrivateDataInterface %s, %p\n", debugstr_guid(&guid).c_str(), pData);
+    TRACE("D3D11CommandQueue::SetPrivateDataInterface %s, %p\n",
+          debugstr_guid(&guid).c_str(), pData);
     return m_immediateContext->SetPrivateDataInterface(guid, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::SetName(LPCWSTR Name) {
     TRACE("D3D11CommandQueue::SetName %ls\n", Name);
-    
+
     // Convert wide string to narrow string for D3D11 debug name
     char name[1024];
     wcstombs(name, Name, sizeof(name));
-    
+
     // Set debug name on the immediate context
     return m_immediateContext->SetPrivateData(WKPDID_D3DDebugObjectName,
-                                            strlen(name), name);
+                                              strlen(name), name);
 }
 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetDevice(REFIID riid,
                                                        void** ppvDevice) {
-    TRACE("D3D11CommandQueue::GetDevice %s, %p\n", debugstr_guid(&riid).c_str(), ppvDevice);
+    TRACE("D3D11CommandQueue::GetDevice %s, %p\n", debugstr_guid(&riid).c_str(),
+          ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
@@ -143,10 +144,12 @@ void STDMETHODCALLTYPE D3D11CommandQueue::UpdateTileMappings(
     UINT NumRanges, const D3D12_TILE_RANGE_FLAGS* pRangeFlags,
     const UINT* pHeapRangeStartOffsets, const UINT* pRangeTileCounts,
     D3D12_TILE_MAPPING_FLAGS Flags) {
-    TRACE("D3D11CommandQueue::UpdateTileMappings %p, %u, %p, %p, %p, %u, %p, %p, %p, %d\n", pResource,
-          NumResourceRegions, pResourceRegionStartCoordinates,
-          pResourceRegionSizes, pHeap, NumRanges, pRangeFlags,
-          pHeapRangeStartOffsets, pRangeTileCounts, Flags);
+    TRACE(
+        "D3D11CommandQueue::UpdateTileMappings %p, %u, %p, %p, %p, %u, %p, %p, "
+        "%p, %d\n",
+        pResource, NumResourceRegions, pResourceRegionStartCoordinates,
+        pResourceRegionSizes, pHeap, NumRanges, pRangeFlags,
+        pHeapRangeStartOffsets, pRangeTileCounts, Flags);
     // D3D11 doesn't support tiled resources in the same way
     FIXME("Tiled resource mapping not implemented.\n");
 }
@@ -157,15 +160,17 @@ void STDMETHODCALLTYPE D3D11CommandQueue::CopyTileMappings(
     ID3D12Resource* pSrcResource,
     const D3D12_TILED_RESOURCE_COORDINATE* pSrcRegionStartCoordinate,
     const D3D12_TILE_REGION_SIZE* pRegionSize, D3D12_TILE_MAPPING_FLAGS Flags) {
-    TRACE("D3D11CommandQueue::CopyTileMappings %p, %p, %p, %p, %p, %d\n", pDstResource, pDstRegionStartCoordinate,
-          pSrcResource, pSrcRegionStartCoordinate, pRegionSize, Flags);
+    TRACE("D3D11CommandQueue::CopyTileMappings %p, %p, %p, %p, %p, %d\n",
+          pDstResource, pDstRegionStartCoordinate, pSrcResource,
+          pSrcRegionStartCoordinate, pRegionSize, Flags);
     // D3D11 doesn't support tiled resources in the same way
     FIXME("Tiled resource copy not implemented.\n");
 }
 
 void STDMETHODCALLTYPE D3D11CommandQueue::ExecuteCommandLists(
     UINT NumCommandLists, ID3D12CommandList* const* ppCommandLists) {
-    TRACE("D3D11CommandQueue::ExecuteCommandLists %u, %p\n", NumCommandLists, ppCommandLists);
+    TRACE("D3D11CommandQueue::ExecuteCommandLists %u, %p\n", NumCommandLists,
+          ppCommandLists);
 
     for (UINT i = 0; i < NumCommandLists; i++) {
         auto d3d11_list = static_cast<D3D11CommandList*>(ppCommandLists[i]);
@@ -229,13 +234,14 @@ D3D11CommandQueue::GetTimestampFrequency(UINT64* pFrequency) {
 
 HRESULT STDMETHODCALLTYPE D3D11CommandQueue::GetClockCalibration(
     UINT64* pGpuTimestamp, UINT64* pCpuTimestamp) {
-    TRACE("D3D11CommandQueue::GetClockCalibration %p, %p\n", pGpuTimestamp, pCpuTimestamp);
+    TRACE("D3D11CommandQueue::GetClockCalibration %p, %p\n", pGpuTimestamp,
+          pCpuTimestamp);
     // D3D11 doesn't support timestamp queries on the command queue
     return E_NOTIMPL;
 }
 
-D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE D3D11CommandQueue::GetDesc(
-    D3D12_COMMAND_QUEUE_DESC* pDesc) {
+D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE
+D3D11CommandQueue::GetDesc(D3D12_COMMAND_QUEUE_DESC* pDesc) {
     TRACE("D3D11CommandQueue::GetDesc(%p)\n", pDesc);
     if (pDesc) {
         *pDesc = m_desc;
@@ -243,32 +249,17 @@ D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE D3D11CommandQueue::GetDesc(
     return pDesc;
 }
 
-HRESULT D3D11CommandQueue::create_swapchain(
-    IDXGIFactory* pFactory,
-    HWND hWnd,
-    const DXGI_SWAP_CHAIN_DESC1* pDesc,
-    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
-    IDXGIOutput* pRestrictToOutput,
-    IDXGISwapChain1** ppSwapChain) {
-    TRACE("D3D11CommandQueue::create_swapchain %p, %p, %p, %p, %p, %p\n",
-          pFactory, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput, ppSwapChain);
+// IWineDXGISwapChainFactory implementation
+HRESULT STDMETHODCALLTYPE D3D11CommandQueue::create_swapchain(
+    IDXGIFactory* factory, HWND window, const DXGI_SWAP_CHAIN_DESC1* desc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen_desc, IDXGIOutput* output,
+    IDXGISwapChain1** swapchain) {
+    
+    TRACE("D3D11CommandQueue::create_swapchain(%p, %p, %p, %p, %p, %p)\n",
+          factory, window, desc, fullscreen_desc, output, swapchain);
 
-    if (!pFactory || !hWnd || !pDesc || !ppSwapChain) {
-        ERR("D3D11CommandQueue::create_swapchain invalid arguments\n");
-        return E_INVALIDARG;
-    }
-
-    Microsoft::WRL::ComPtr<IDXGIFactory2> factory2;
-    HRESULT hr = pFactory->QueryInterface(__uuidof(IDXGIFactory2), &factory2);
-    if (FAILED(hr)) {
-        ERR("Failed to get IDXGIFactory2 interface, hr %#x\n", hr);
-        return hr;
-    }
-
-    // Create our custom D3D11SwapChain
-    TRACE("Create our custom D3D11SwapChain");
-    return D3D11SwapChain::Create(m_device, factory2.Get(), hWnd, pDesc,
-                                 pFullscreenDesc, pRestrictToOutput, ppSwapChain);
+    return D3D11SwapChain::Create(m_device, factory, window, desc, 
+                                 fullscreen_desc, output, swapchain);
 }
 
 }  // namespace dxiided

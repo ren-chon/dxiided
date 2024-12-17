@@ -170,14 +170,6 @@ HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
         return E_NOINTERFACE;
     }
 
-    // Wine/DXVK swapchain factory interface
-    static const GUID IID_IWineDXGISwapChainFactory = 
-        {0x53cb4ff0, 0xc25a, 0x4164, {0xa8, 0x91, 0x0e, 0x83, 0xdb, 0x0a, 0x7a, 0xac}};
-    if (IsEqualGUID(riid, IID_IWineDXGISwapChainFactory)) {
-        TRACE("Returning IWineDXGISwapChainFactory interface\n");
-        return m_d3d11Device->QueryInterface(riid, ppvObject);
-    }
-
     WARN("Unknown interface query %s\n", debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }

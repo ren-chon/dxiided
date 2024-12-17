@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>
+#include <dxgi1_2.h>
 #include <wrl/client.h>
 #include <initguid.h>
 
@@ -11,47 +12,34 @@
 #include <vector>
 
 #include "common/debug.hpp"
-#include "d3d11_impl/swapchain.hpp"
 
 namespace dxiided {
 
 class D3D11Device;
 class D3D11CommandList;
 
-// Wine/DXVK swapchain factory interface
+// Define the IWineDXGISwapChainFactory interface GUID
 DEFINE_GUID(IID_IWineDXGISwapChainFactory,
-    0x53cb4ff0, 0xc25a, 0x4164, 0xa8, 0x91, 0x0e, 0x83, 0xdb, 0x0a, 0x7a, 0xac);
+    0x53cb4ff0, 0xc25a, 0x4164,
+    0xa8, 0x91, 0x0e, 0x83, 0xdb, 0x0a, 0x7a, 0xac);
 
-class IWineDXGISwapChainFactory : public IUnknown {
-public:
+// Define the interface
+interface IWineDXGISwapChainFactory : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE create_swapchain(
-        IDXGIFactory* pFactory,
-        HWND hWnd,
-        const DXGI_SWAP_CHAIN_DESC1* pDesc,
-        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
-        IDXGIOutput* pRestrictToOutput,
-        IDXGISwapChain1** ppSwapChain) = 0;
+        IDXGIFactory* factory,
+        HWND window,
+        const DXGI_SWAP_CHAIN_DESC1* desc,
+        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen_desc,
+        IDXGIOutput* output,
+        IDXGISwapChain1** swapchain) = 0;
 };
 
 class D3D11CommandQueue final : public ID3D12CommandQueue,
-                              public IWineDXGISwapChainFactory {
+                               public IWineDXGISwapChainFactory{
    public:
     static HRESULT Create(D3D11Device* device,
                           const D3D12_COMMAND_QUEUE_DESC* desc, REFIID riid,
                           void** command_queue);
-
-    // Custom methods for D3D11 compatibility
-    HRESULT CreateSwapChain(HWND hwnd, DXGI_SWAP_CHAIN_DESC1* desc,
-                           IDXGISwapChain1** ppSwapChain);
-
-    // IWineDXGISwapChainFactory methods
-    HRESULT STDMETHODCALLTYPE create_swapchain(
-        IDXGIFactory* pFactory,
-        HWND hWnd,
-        const DXGI_SWAP_CHAIN_DESC1* pDesc,
-        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
-        IDXGIOutput* pRestrictToOutput,
-        IDXGISwapChain1** ppSwapChain) override;
 
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
@@ -104,6 +92,15 @@ class D3D11CommandQueue final : public ID3D12CommandQueue,
     D3D12_COMMAND_QUEUE_DESC* STDMETHODCALLTYPE GetDesc(
         D3D12_COMMAND_QUEUE_DESC* pDesc) override;
 
+    // IWineDXGISwapChainFactory methods
+    HRESULT STDMETHODCALLTYPE create_swapchain(
+        IDXGIFactory* factory,
+        HWND window,
+        const DXGI_SWAP_CHAIN_DESC1* desc,
+        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen_desc,
+        IDXGIOutput* output,
+        IDXGISwapChain1** swapchain) override;
+
    private:
     D3D11CommandQueue(D3D11Device* device,
                       const D3D12_COMMAND_QUEUE_DESC* desc);
@@ -111,7 +108,6 @@ class D3D11CommandQueue final : public ID3D12CommandQueue,
     D3D11Device* m_device;
     D3D12_COMMAND_QUEUE_DESC m_desc;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
-    Microsoft::WRL::ComPtr<IDXGISwapChain1> m_swapChain;
     LONG m_refCount = 1;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_immediateContext;
 
