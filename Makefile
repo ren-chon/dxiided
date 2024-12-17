@@ -1,11 +1,11 @@
 CXX = x86_64-w64-mingw32-g++
 WINDRES = x86_64-w64-mingw32-windres
 
-CXXFLAGS = -O0 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -std=c++17 -DWIN32_LEAN_AND_MEAN -DWINVER=0x0A00 -DDEBUG
+CXXFLAGS = -O0 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -std=c++17 -DWIN32_LEAN_AND_MEAN -DWINVER=0x0A00
 LDFLAGS = -static -static-libgcc -static-libstdc++ -Wl,--enable-stdcall-fixup
 
 INCLUDES = -Iinclude
-LIBS = -ld3d11 -ldxgi -lole32
+LIBS = -ld3d11 -ldxgi -lole32 -ldxguid -ld3d10 -ld3dcompiler -luser32 -lgdi32
 
 BUILD_DIR = build
 COMMON_SOURCES = src/common/debug.cpp src/common/debug_symbols.cpp

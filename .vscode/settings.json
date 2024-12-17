@@ -65,7 +65,8 @@
     "sstream": "cpp",
     "stop_token": "cpp",
     "thread": "cpp",
-    "iostream": "cpp"
+    "iostream": "cpp",
+    "unordered_set": "cpp"
   },
   "C_Cpp.clang_format_style": {
     "BasedOnStyle": "Google",

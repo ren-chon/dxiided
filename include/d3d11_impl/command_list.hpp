@@ -3,10 +3,10 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <wrl/client.h>
-
+#include <mutex>
 #include <memory>
 #include <vector>
-
+#include <atomic>
 #include "common/debug.hpp"
 
 namespace dxiided {
@@ -19,6 +19,9 @@ class D3D11CommandList final : public ID3D12GraphicsCommandList {
                           ID3D12CommandAllocator* allocator,
                           ID3D12PipelineState* initial_state, REFIID riid,
                           void** command_list);
+
+    // Get the native D3D11 command list
+    HRESULT GetD3D11CommandList(ID3D11CommandList** ppCommandList);
 
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
@@ -244,6 +247,7 @@ class D3D11CommandList final : public ID3D12GraphicsCommandList {
     LONG m_refCount{1};
     bool m_isOpen{true};
     Microsoft::WRL::ComPtr<ID3D11CommandList> m_deferred;
+    Microsoft::WRL::ComPtr<ID3D11CommandList> m_d3d11CommandList;
 };
 
 }  // namespace dxiided
