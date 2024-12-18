@@ -23,6 +23,13 @@ class D3D11Resource final : public ID3D12Resource {
                           const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                           REFIID riid, void** ppvResource);
 
+    // Create a D3D11Resource wrapper around an existing D3D11 resource
+    static HRESULT Create(D3D11Device* device,
+                         ID3D11Resource* resource,
+                         const D3D12_RESOURCE_DESC* pDesc,
+                         D3D12_RESOURCE_STATES InitialState,
+                         REFIID riid, void** ppvResource);
+
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
                                              void** ppvObject) override;
@@ -47,8 +54,7 @@ class D3D11Resource final : public ID3D12Resource {
                                   void** ppData) override;
     void STDMETHODCALLTYPE Unmap(UINT Subresource,
                                  const D3D12_RANGE* pWrittenRange) override;
-    D3D12_RESOURCE_DESC* STDMETHODCALLTYPE
-    GetDesc(D3D12_RESOURCE_DESC* desc) override;
+    D3D12_RESOURCE_DESC* STDMETHODCALLTYPE GetDesc(D3D12_RESOURCE_DESC* pDesc) override;
     D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE GetGPUVirtualAddress() override;
     HRESULT STDMETHODCALLTYPE WriteToSubresource(UINT DstSubresource,
                                                  const D3D12_BOX* pDstBox,
@@ -71,13 +77,19 @@ class D3D11Resource final : public ID3D12Resource {
                          D3D11Resource* pResourceAfter);
 
     // Helper methods
-    ID3D11Resource* GetD3D11Resource() { return m_resource.Get(); }
+    ID3D11Resource* GetD3D11Resource() const { return m_resource.Get(); }
     static UINT GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc);
+    void StoreInDeviceMap();
 
    private:
     D3D11Resource(D3D11Device* device,
                   const D3D12_HEAP_PROPERTIES* pHeapProperties,
                   D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC* pDesc,
+                  D3D12_RESOURCE_STATES InitialState);
+
+    // Constructor for wrapping existing D3D11 resource
+    D3D11Resource(D3D11Device* device, ID3D11Resource* resource,
+                  const D3D12_RESOURCE_DESC* pDesc,
                   D3D12_RESOURCE_STATES InitialState);
 
     static D3D11_BIND_FLAG GetD3D11BindFlags(const D3D12_RESOURCE_DESC* pDesc);
@@ -93,6 +105,7 @@ class D3D11Resource final : public ID3D12Resource {
     D3D12_GPU_VIRTUAL_ADDRESS m_gpuAddress{0};
     LONG m_refCount{1};
     D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
+    D3D12_RESOURCE_STATES m_state;  // Add state member
     bool m_isUAV{false};
 };
 

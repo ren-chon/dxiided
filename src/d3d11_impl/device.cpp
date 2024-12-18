@@ -484,21 +484,20 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
         return;
     }
 
-    // Get D3D11 resource from D3D12 resource
-    auto it = m_resourceMap.find(pResource);
-    if (it == m_resourceMap.end()) {
+    ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
+    if (!d3d11Resource) {
         ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
         return;
     }
 
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
-    HRESULT hr = m_d3d11Device->CreateShaderResourceView(it->second.Get(),
-                                                         nullptr, &srv);
+    HRESULT hr = m_d3d11Device->CreateShaderResourceView(d3d11Resource, nullptr, &srv);
     if (FAILED(hr)) {
         ERR("Failed to create D3D11 shader resource view, hr %#x\n", hr);
         return;
     }
 
+    TRACE("Store view in descriptor heap");
     // Store view in descriptor heap
     auto* descriptor =
         reinterpret_cast<ID3D11ShaderResourceView**>(DestDescriptor.ptr);
@@ -521,16 +520,14 @@ void STDMETHODCALLTYPE D3D11Device::CreateUnorderedAccessView(
         return;
     }
 
-    // Get D3D11 resource from D3D12 resource
-    auto it = m_resourceMap.find(pResource);
-    if (it == m_resourceMap.end()) {
+    ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
+    if (!d3d11Resource) {
         ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
         return;
     }
 
     Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> uav;
-    HRESULT hr = m_d3d11Device->CreateUnorderedAccessView(it->second.Get(),
-                                                          nullptr, &uav);
+    HRESULT hr = m_d3d11Device->CreateUnorderedAccessView(d3d11Resource, nullptr, &uav);
     if (FAILED(hr)) {
         ERR("Failed to create D3D11 unordered access view, hr %#x\n", hr);
         return;
@@ -556,16 +553,15 @@ void STDMETHODCALLTYPE D3D11Device::CreateRenderTargetView(
         return;
     }
 
-    // Get D3D11 resource from D3D12 resource
-    auto it = m_resourceMap.find(pResource);
-    if (it == m_resourceMap.end()) {
+    ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
+    if (!d3d11Resource) {
         ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
         return;
     }
 
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
     HRESULT hr =
-        m_d3d11Device->CreateRenderTargetView(it->second.Get(), nullptr, &rtv);
+        m_d3d11Device->CreateRenderTargetView(d3d11Resource, nullptr, &rtv);
     if (FAILED(hr)) {
         ERR("Failed to create D3D11 render target view, hr %#x\n", hr);
         return;
@@ -591,16 +587,15 @@ void STDMETHODCALLTYPE D3D11Device::CreateDepthStencilView(
         return;
     }
 
-    // Get D3D11 resource from D3D12 resource
-    auto it = m_resourceMap.find(pResource);
-    if (it == m_resourceMap.end()) {
+    ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
+    if (!d3d11Resource) {
         ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
         return;
     }
 
     Microsoft::WRL::ComPtr<ID3D11DepthStencilView> dsv;
     HRESULT hr =
-        m_d3d11Device->CreateDepthStencilView(it->second.Get(), nullptr, &dsv);
+        m_d3d11Device->CreateDepthStencilView(d3d11Resource, nullptr, &dsv);
     if (FAILED(hr)) {
         ERR("Failed to create D3D11 depth stencil view, hr %#x\n", hr);
         return;
@@ -1240,6 +1235,26 @@ D3D_FEATURE_LEVEL STDMETHODCALLTYPE D3D11Device::GetFeatureLevel() {
 
 UINT STDMETHODCALLTYPE D3D11Device::GetCreationFlags() {
     return m_d3d11Device ? m_d3d11Device->GetCreationFlags() : 0;
+}
+
+ID3D11Resource* D3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
+    if (!d3d12Resource) {
+        return nullptr;
+    }
+
+    // Try to get the D3D11 resource from the D3D12 resource's private data
+    ID3D11Resource* d3d11Resource = nullptr;
+    UINT dataSize = sizeof(ID3D11Resource*);
+    
+    if (SUCCEEDED(d3d12Resource->GetPrivateData(
+            __uuidof(ID3D11Resource),
+            &dataSize,
+            &d3d11Resource))) {
+        return d3d11Resource;
+    }
+
+    ERR("D3D11 resource not found for D3D12 resource %p\n", d3d12Resource);
+    return nullptr;
 }
 
 }  // namespace dxiided

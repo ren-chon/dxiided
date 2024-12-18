@@ -333,6 +333,11 @@ class D3D11Device final : public ID3D12Device2,
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<ID3D11Resource>>
         m_resourceMap;
     std::vector<std::unique_ptr<D3D11CommandQueue>> m_commandQueues;
+
+    // Helper to get D3D11 resource from D3D12 resource using private data
+    ID3D11Resource* GetD3D11Resource(ID3D12Resource* d3d12Resource);
+
+    // Get D3D11 device interface
 };
 
 }  // namespace dxiided

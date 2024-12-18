@@ -238,6 +238,8 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
     // Try to get the underlying D3D12 resource from the base swapchain
     if (riid == __uuidof(ID3D12Resource)) {
         TRACE("Game requesting D3D12 resource for backbuffer\n");
+        
+        // Create resource description for the back buffer
         D3D12_RESOURCE_DESC desc = {};
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Width = m_width;
@@ -249,20 +251,12 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
         desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-        heapProps.CreationNodeMask = 1;
-        heapProps.VisibleNodeMask = 1;
-
+        // Create D3D11Resource wrapper around the back buffer
         return D3D11Resource::Create(
             m_device,
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
+            m_backbuffers[Buffer].Get(),
             &desc,
             D3D12_RESOURCE_STATE_PRESENT,
-            nullptr,
             riid,
             ppSurface);
     }

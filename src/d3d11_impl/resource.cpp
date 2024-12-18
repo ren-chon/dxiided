@@ -31,6 +31,26 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
     return resource.CopyTo(reinterpret_cast<ID3D12Resource**>(ppvResource));
 }
 
+HRESULT D3D11Resource::Create(D3D11Device* device,
+                             ID3D11Resource* resource,
+                             const D3D12_RESOURCE_DESC* pDesc,
+                             D3D12_RESOURCE_STATES InitialState,
+                             REFIID riid, void** ppvResource) {
+    if (!device || !resource || !pDesc || !ppvResource) {
+        return E_INVALIDARG;
+    }
+
+    Microsoft::WRL::ComPtr<D3D11Resource> wrapper = new D3D11Resource(
+        device, resource, pDesc, InitialState);
+
+    if (!wrapper->GetD3D11Resource()) {
+        ERR("Failed to wrap D3D11 resource.\n");
+        return E_FAIL;
+    }
+
+    return wrapper.CopyTo(reinterpret_cast<ID3D12Resource**>(ppvResource));
+}
+
 D3D11Resource::D3D11Resource(D3D11Device* device,
                              const D3D12_HEAP_PROPERTIES* pHeapProperties,
                              D3D12_HEAP_FLAGS HeapFlags,
@@ -156,6 +176,43 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
         default:
             ERR("Unsupported resource dimension %d.\n", pDesc->Dimension);
             break;
+    }
+}
+
+D3D11Resource::D3D11Resource(D3D11Device* device,
+                            ID3D11Resource* resource,
+                            const D3D12_RESOURCE_DESC* pDesc,
+                            D3D12_RESOURCE_STATES InitialState)
+    : m_device(device)
+    , m_desc(*pDesc)
+    , m_state(InitialState) {
+    
+    if (resource) {
+        m_resource = resource;
+        StoreInDeviceMap();
+    }
+}
+
+void D3D11Resource::StoreInDeviceMap() {
+    if (m_device && m_resource) {
+        // Store the mapping between D3D12 and D3D11 resources in the device
+        Microsoft::WRL::ComPtr<ID3D11Device> d3d11Device;
+        if (SUCCEEDED(m_device->QueryInterface(__uuidof(ID3D11Device), 
+            reinterpret_cast<void**>(d3d11Device.GetAddressOf())))) {
+            
+            // Store this D3D12 wrapper as private data on the D3D11 resource
+            m_resource->SetPrivateDataInterface(
+                __uuidof(ID3D12Resource),
+                static_cast<ID3D12Resource*>(this));
+
+            // Also store the D3D11 resource as private data on this D3D12 wrapper
+            SetPrivateDataInterface(
+                __uuidof(ID3D11Resource),
+                m_resource.Get());
+
+            TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p\n", 
+                  this, m_resource.Get());
+        }
     }
 }
 
@@ -431,21 +488,22 @@ void STDMETHODCALLTYPE D3D11Resource::Unmap(UINT Subresource,
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
-D3D12_RESOURCE_DESC* STDMETHODCALLTYPE
-D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DESC* desc) {
-    TRACE("D3D11Resource::GetDesc(%p)\n", desc);
-    TRACE("  Dimension: %d\n", desc->Dimension);
-    TRACE("  Alignment: %llu\n", desc->Alignment);
-    TRACE("  Width: %llu\n", desc->Width);
-    TRACE("  Height: %u\n", desc->Height);
-    TRACE("  DepthOrArraySize: %hu\n", desc->DepthOrArraySize);
-    TRACE("  MipLevels: %hu\n", desc->MipLevels);
-    TRACE("  Format: %d\n", desc->Format);
-    TRACE("  SampleDesc.Count: %u\n", desc->SampleDesc.Count);
-    TRACE("  SampleDesc.Quality: %u\n", desc->SampleDesc.Quality);
-    TRACE("  Layout: %d\n", desc->Layout);
-    *desc = m_desc;
-    return desc;
+D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
+    if (pDesc) {
+        TRACE("D3D11Resource::GetDesc(%p)\n", pDesc);
+        TRACE("  Dimension: %d\n", m_desc.Dimension);
+        TRACE("  Alignment: %llu\n", m_desc.Alignment);
+        TRACE("  Width: %llu\n", m_desc.Width);
+        TRACE("  Height: %u\n", m_desc.Height);
+        TRACE("  DepthOrArraySize: %hu\n", m_desc.DepthOrArraySize);
+        TRACE("  MipLevels: %hu\n", m_desc.MipLevels);
+        TRACE("  Format: %d\n", m_desc.Format);
+        TRACE("  SampleDesc.Count: %u\n", m_desc.SampleDesc.Count);
+        TRACE("  SampleDesc.Quality: %u\n", m_desc.SampleDesc.Quality);
+        TRACE("  Layout: %d\n", m_desc.Layout);
+        *pDesc = m_desc;
+    }
+    return pDesc;
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
