@@ -77,12 +77,11 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
             bufferDesc.Usage = usage;
             bufferDesc.BindFlags = bindFlags;
-            bufferDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
-                : (usage == D3D11_USAGE_STAGING)
-                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                    : 0;
-            bufferDesc.MiscFlags = 0;
+            bufferDesc.CPUAccessFlags = 
+                (usage == D3D11_USAGE_DYNAMIC) ? (D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ)
+                : (usage == D3D11_USAGE_STAGING) ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                : 0;
+            bufferDesc.MiscFlags = GetMiscFlags(pDesc);
             bufferDesc.StructureByteStride = 0;
 
             Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
@@ -272,6 +271,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
     // Handle UAV barriers
     if (newState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ||
         m_currentState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        TRACE("UAV barrier\n");
         context->CSSetUnorderedAccessViews(0, 1, nullptr, nullptr);
         m_isUAV = (newState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
@@ -281,6 +281,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
          newState != D3D12_RESOURCE_STATE_RENDER_TARGET) ||
         (m_currentState != D3D12_RESOURCE_STATE_RENDER_TARGET &&
          newState == D3D12_RESOURCE_STATE_RENDER_TARGET)) {
+        TRACE("RT barrier\n");
         context->Flush();
     }
 
@@ -289,6 +290,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
          newState != D3D12_RESOURCE_STATE_DEPTH_WRITE) ||
         (m_currentState != D3D12_RESOURCE_STATE_DEPTH_WRITE &&
          newState == D3D12_RESOURCE_STATE_DEPTH_WRITE)) {
+        TRACE("DS barrier\n");
         context->Flush();
     }
 
@@ -486,13 +488,18 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
                                              void** ppData) {
     TRACE("D3D11Resource::Map %u, %p, %p\n", Subresource, pReadRange, ppData);
 
+    // For ring buffers, use NO_OVERWRITE to preserve existing data
     D3D11_MAPPED_SUBRESOURCE mappedResource;
+    D3D11_MAP mapType = (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && 
+                        m_desc.Width > 1024 * 1024) ? // Likely a ring buffer if > 1MB
+                       D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD;
+    
     HRESULT hr = m_device->GetD3D11Context()->Map(m_resource.Get(), Subresource,
-                                                  D3D11_MAP_WRITE_DISCARD, 0,
-                                                  &mappedResource);
-
+                                                 mapType, 0,
+                                                 &mappedResource);
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
+        TRACE("Mapped %p\n", mappedResource.pData);
     }
 
     return hr;
