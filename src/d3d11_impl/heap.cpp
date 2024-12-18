@@ -20,6 +20,26 @@ HRESULT D3D11Heap::Create(D3D11Device* device, const D3D12_HEAP_DESC& desc,
 D3D11Heap::D3D11Heap(D3D11Device* device, const D3D12_HEAP_DESC& desc)
     : m_device(device), m_desc(desc) {
     TRACE("D3D11Heap::D3D11Heap(%p, %p)\n", device, &desc);
+    TRACE(" SizeInBytes: %llu\n", desc.SizeInBytes);
+    TRACE(" Properties.Type: %d\n", desc.Properties.Type);
+    TRACE(" Properties.CPUPageProperty: %d\n", desc.Properties.CPUPageProperty);
+    TRACE(" Properties.MemoryPoolPreference: %d\n", desc.Properties.MemoryPoolPreference);
+    TRACE(" Alignment: %llu\n", desc.Alignment);
+    TRACE(" Flags: %#x\n", desc.Flags);
+
+    // Create a D3D11 buffer to back this heap
+    D3D11_BUFFER_DESC bufferDesc = {};
+    bufferDesc.ByteWidth = static_cast<UINT>(desc.SizeInBytes);
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+    bufferDesc.CPUAccessFlags = 0;
+    bufferDesc.MiscFlags = 0;
+    bufferDesc.StructureByteStride = 0;
+
+    HRESULT hr = device->GetD3D11Device()->CreateBuffer(&bufferDesc, nullptr, &m_buffer);
+    if (FAILED(hr)) {
+        ERR("Failed to create buffer for heap, hr %#x\n", hr);
+    }
 }
 
 // IUnknown methods

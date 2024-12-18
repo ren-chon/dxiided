@@ -823,10 +823,39 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePlacedResource(
     D3D12_RESOURCE_STATES InitialState,
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid,
     void** ppvResource) {
-    TRACE("D3D11Device::CreatePlacedResource(%p, %llu, %p, %u, %p, %s, %p)\n",
-          pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue,
-          debugstr_guid(&riid).c_str(), ppvResource);
-    return E_NOTIMPL;
+    TRACE("D3D11Device::CreatePlacedResource called for %s\n",
+          debugstr_guid(&riid).c_str());
+    TRACE("  Dimension: %d", pDesc->Dimension);
+    TRACE("  Alignment: %llu", pDesc->Alignment);
+    TRACE("  Width: %llu", pDesc->Width);
+    TRACE("  Height: %u", pDesc->Height);
+    TRACE("  DepthOrArraySize: %u", pDesc->DepthOrArraySize);
+    TRACE("  MipLevels: %u", pDesc->MipLevels);
+    TRACE("  Format: %d", pDesc->Format);
+    TRACE("  Count: %u", pDesc->SampleDesc.Count);
+    TRACE("  Quality: %u", pDesc->SampleDesc.Quality);
+    TRACE("  Layout: %d", pDesc->Layout);
+    TRACE("  Flags: %u", pDesc->Flags);
+    
+    if (!pHeap || !pDesc || !ppvResource) {
+        ERR("Invalid parameters");
+        return E_INVALIDARG;
+    }
+
+    // Get the D3D11Heap from the D3D12Heap
+    D3D11Heap* heap = static_cast<D3D11Heap*>(pHeap);
+    if (!heap) {
+        ERR("Invalid heap\n");
+        return E_INVALIDARG;
+    }
+
+    // Get heap properties from the D3D12 heap
+    D3D12_HEAP_DESC heapDesc;
+    pHeap->GetDesc(&heapDesc);
+
+    // Create a D3D11 resource using the heap's buffer
+    return D3D11Resource::Create(this, heap->GetD3D11Buffer(), pDesc,
+                               InitialState, riid, ppvResource);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateReservedResource(
@@ -855,15 +884,15 @@ HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedHandle(HANDLE NTHandle,
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedHandleByName(
-    LPCWSTR Name, DWORD Access, HANDLE* pNTHandle) {
+HRESULT STDMETHODCALLTYPE
+D3D11Device::OpenSharedHandleByName(LPCWSTR Name, DWORD Access, HANDLE* pNTHandle) {
     TRACE("D3D11Device::OpenSharedHandleByName(%s, %u, %p)\n",
           debugstr_w(Name).c_str(), Access, pNTHandle);
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE
-D3D11Device::MakeResident(UINT NumObjects, ID3D12Pageable* const* ppObjects) {
+HRESULT STDMETHODCALLTYPE D3D11Device::MakeResident(UINT NumObjects,
+                                             ID3D12Pageable* const* ppObjects) {
     TRACE("D3D11Device::MakeResident(%u, %p)\n", NumObjects, ppObjects);
     return E_NOTIMPL;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <d3d11.h>
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -29,11 +30,15 @@ public:
     // ID3D12Heap methods
     D3D12_HEAP_DESC* STDMETHODCALLTYPE GetDesc(D3D12_HEAP_DESC* desc) override;
 
+    // D3D11Heap methods
+    ID3D11Buffer* GetD3D11Buffer() { return m_buffer.Get(); }
+
 private:
     D3D11Heap(D3D11Device* device, const D3D12_HEAP_DESC& desc);
 
     D3D11Device* m_device;
     D3D12_HEAP_DESC m_desc;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_buffer;
     LONG m_refCount = 1;
 };
 
