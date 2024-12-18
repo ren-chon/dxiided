@@ -43,7 +43,7 @@ HRESULT D3D11SwapChain::Create(
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
-    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;  // Allow both RT and SRV
     swapchain_desc.BufferCount = buffer_count;
     swapchain_desc.OutputWindow = window;
     swapchain_desc.Windowed =
