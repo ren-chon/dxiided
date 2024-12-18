@@ -525,8 +525,8 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
         switch (pDesc->ViewDimension) {
             case D3D12_SRV_DIMENSION_TEXTURE2D:
                 TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched\n");
-                d3d11Desc.Texture2D.MostDetailedMip = 0;
-                d3d11Desc.Texture2D.MipLevels = 1;
+                d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
+                d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;  // Use D3D12's requested mip levels
                 break;
             default:
                 ERR("Unsupported view dimension: %d\n", pDesc->ViewDimension);
@@ -541,7 +541,7 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
         d3d11Desc.Format = static_cast<DXGI_FORMAT>(resDesc.Format);
         d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
         d3d11Desc.Texture2D.MostDetailedMip = 0;
-        d3d11Desc.Texture2D.MipLevels = resDesc.MipLevels;
+        d3d11Desc.Texture2D.MipLevels = -1;  // Use all mips
     }
 
     TRACE("Store view in descriptor heap\n");
