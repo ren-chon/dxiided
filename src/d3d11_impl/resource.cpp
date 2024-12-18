@@ -17,6 +17,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         pOptimizedClearValue, debugstr_guid(&riid).c_str(), ppvResource);
 
     if (!device || !pHeapProperties || !pDesc || !ppvResource) {
+        WARN("Invalid parameters: device: %d, pHeapProperties: %p, pDesc: %d, ppvResource: %r", device , pHeapProperties , pDesc , ppvResource);
         return E_INVALIDARG;
     }
 
@@ -37,6 +38,8 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
                              D3D12_RESOURCE_STATES InitialState,
                              REFIID riid, void** ppvResource) {
     if (!device || !resource || !pDesc || !ppvResource) {
+        WARN("Invalid parameters: device=%p, resource=%p, pDesc=%p, ppvResource=%p\n",
+              device, resource, pDesc, ppvResource);
         return E_INVALIDARG;
     }
 
@@ -311,26 +314,35 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
     TRACE("D3D11Resource::GetD3D11BindFlags called");
     D3D11_BIND_FLAG flags = static_cast<D3D11_BIND_FLAG>(0);
 
+    // For swap chain buffers, we need both RT and SRV capabilities
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
+        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET");
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_RENDER_TARGET);
+
+        // If it's a render target and not explicitly denied shader resource,
+        // assume it needs shader resource capability (common for swap chains)
+        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
+            TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
+            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
+        }
     }
+
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL");
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_DEPTH_STENCIL);
     }
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
-        flags =
-            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
+        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
     }
-    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-        flags =
-            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
-    }
-    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER |
-                                             D3D11_BIND_INDEX_BUFFER |
-                                             D3D11_BIND_CONSTANT_BUFFER);
+    
+    // For non-render targets, add shader resource if not denied
+    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) && 
+        !(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
+            TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
+        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
     }
 
+    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x\n", pDesc->Flags, flags);
     return flags;
 }
 
