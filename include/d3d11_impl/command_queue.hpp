@@ -34,8 +34,10 @@ interface IWineDXGISwapChainFactory : IUnknown {
         IDXGISwapChain1** swapchain) = 0;
 };
 
+
 class D3D11CommandQueue final : public ID3D12CommandQueue,
-                               public IWineDXGISwapChainFactory{
+                               public IWineDXGISwapChainFactory
+                               {
    public:
     static HRESULT Create(D3D11Device* device,
                           const D3D12_COMMAND_QUEUE_DESC* desc, REFIID riid,
@@ -100,6 +102,7 @@ class D3D11CommandQueue final : public ID3D12CommandQueue,
         const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen_desc,
         IDXGIOutput* output,
         IDXGISwapChain1** swapchain) override;
+
 
    private:
     D3D11CommandQueue(D3D11Device* device,

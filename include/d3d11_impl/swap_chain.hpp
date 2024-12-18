@@ -2,6 +2,7 @@
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <dxgi1_5.h>
 #include <wrl/client.h>
 #include <atomic>
 #include <vector>
@@ -12,7 +13,7 @@ namespace dxiided {
 
 class D3D11Device;
 
-class D3D11SwapChain final : public IDXGISwapChain1 {
+class D3D11SwapChain final : public IDXGISwapChain4 {
 public:
     static HRESULT Create(
         D3D11Device* device,
@@ -28,6 +29,7 @@ public:
                                            void** ppvObject) override;
     ULONG STDMETHODCALLTYPE AddRef() override;
     ULONG STDMETHODCALLTYPE Release() override;
+    void DumpBackBufferToImage(UINT bufferIndex);
 
     // IDXGIObject methods
     HRESULT STDMETHODCALLTYPE SetPrivateData(
@@ -107,6 +109,89 @@ public:
     HRESULT STDMETHODCALLTYPE GetRotation(
         DXGI_MODE_ROTATION* pRotation) override;
 
+    // IDXGISwapChain2 methods
+    HRESULT STDMETHODCALLTYPE SetMaximumFrameLatency(UINT MaxLatency) override {
+        TRACE("D3D11SwapChain::SetMaximumFrameLatency called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain2), (void**)&swapchain2) == S_OK ?
+            swapchain2->SetMaximumFrameLatency(MaxLatency) : E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetMaximumFrameLatency(UINT* pMaxLatency) override {
+        TRACE("D3D11SwapChain::GetMaximumFrameLatency called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain2), (void**)&swapchain2) == S_OK ?
+            swapchain2->GetMaximumFrameLatency(pMaxLatency) : E_NOINTERFACE;
+    }
+
+    HANDLE STDMETHODCALLTYPE GetFrameLatencyWaitableObject() override {
+        TRACE("D3D11SwapChain::GetFrameLatencyWaitableObject called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain2), (void**)&swapchain2) == S_OK ?
+            swapchain2->GetFrameLatencyWaitableObject() : nullptr;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetMatrixTransform(const DXGI_MATRIX_3X2_F* pMatrix) override {
+        TRACE("D3D11SwapChain::SetMatrixTransform called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain2), (void**)&swapchain2) == S_OK ?
+            swapchain2->SetMatrixTransform(pMatrix) : E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetMatrixTransform(DXGI_MATRIX_3X2_F* pMatrix) override {
+        TRACE("D3D11SwapChain::GetMatrixTransform called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain2), (void**)&swapchain2) == S_OK ?
+            swapchain2->GetMatrixTransform(pMatrix) : E_NOINTERFACE;
+    }
+
+    // IDXGISwapChain3 methods
+    HRESULT STDMETHODCALLTYPE GetSourceSize(UINT* pWidth, UINT* pHeight) override {
+        TRACE("D3D11SwapChain::GetSourceSize called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->GetSourceSize(pWidth, pHeight) : E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetSourceSize(UINT Width, UINT Height) override {
+        TRACE("D3D11SwapChain::SetSourceSize called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->SetSourceSize(Width, Height) : E_NOINTERFACE;
+    }
+
+
+    HRESULT STDMETHODCALLTYPE CheckColorSpaceSupport(DXGI_COLOR_SPACE_TYPE ColorSpace, UINT* pColorSpaceSupport) override {
+        TRACE("D3D11SwapChain::CheckColorSpaceSupport called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->CheckColorSpaceSupport(ColorSpace, pColorSpaceSupport) : E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace) override {
+        TRACE("D3D11SwapChain::SetColorSpace1 called");
+        TRACE("  ColorSpace: %d\n", ColorSpace);
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->SetColorSpace1(ColorSpace) : E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height, 
+                                           DXGI_FORMAT Format, UINT SwapChainFlags,
+                                           const UINT* pCreationNodeMask,
+                                           IUnknown* const* ppPresentQueue) override {
+        TRACE("D3D11SwapChain::ResizeBuffers1 called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->ResizeBuffers1(BufferCount, Width, Height, Format, SwapChainFlags,
+                                     pCreationNodeMask, ppPresentQueue) : E_NOINTERFACE;
+    }
+
+    UINT STDMETHODCALLTYPE GetCurrentBackBufferIndex() override {
+        TRACE("D3D11SwapChain::GetCurrentBackBufferIndex called");
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+            swapchain3->GetCurrentBackBufferIndex() : 0;
+    }
+
+    // IDXGISwapChain4 methods
+    HRESULT STDMETHODCALLTYPE SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData) override {
+        TRACE("D3D11SwapChain::SetHDRMetaData called");
+        TRACE("  Type: %d\n", Type);
+        TRACE("  Size: %d\n", Size);
+        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain4) == S_OK ?
+            swapchain4->SetHDRMetaData(Type, Size, pMetaData) : E_NOINTERFACE;
+    }
+
 private:
     D3D11SwapChain(
         D3D11Device* device,
@@ -128,6 +213,10 @@ private:
     DXGI_FORMAT m_format = DXGI_FORMAT_UNKNOWN;
     UINT m_width = 0;
     UINT m_height = 0;
+
+    Microsoft::WRL::ComPtr<IDXGISwapChain2> swapchain2;
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain3;
+    Microsoft::WRL::ComPtr<IDXGISwapChain4> swapchain4;
 };
 
 } // namespace dxiided
