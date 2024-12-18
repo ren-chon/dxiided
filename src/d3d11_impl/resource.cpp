@@ -93,6 +93,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
                 return;
             }
             m_resource = buffer;
+            StoreInDeviceMap();
             break;
         }
         case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
@@ -119,6 +120,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
                 return;
             }
             m_resource = texture;
+            StoreInDeviceMap();
             break;
         }
         case D3D12_RESOURCE_DIMENSION_TEXTURE2D: {
@@ -147,6 +149,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
                 return;
             }
             m_resource = texture;
+            StoreInDeviceMap();
             break;
         }
         case D3D12_RESOURCE_DIMENSION_TEXTURE3D: {
@@ -174,6 +177,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
                 return;
             }
             m_resource = texture;
+            StoreInDeviceMap();
             break;
         }
         default:

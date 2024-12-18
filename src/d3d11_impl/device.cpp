@@ -6,6 +6,7 @@
 
 #include "d3d11_impl/descriptor_heap.hpp"
 #include "d3d11_impl/device_features.hpp"
+#include "d3d11_impl/resource.hpp"
 #include "d3d11_impl/fence.hpp"
 #include "d3d11_impl/heap.hpp"
 
@@ -762,11 +763,34 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommittedResource(
     D3D12_RESOURCE_STATES InitialResourceState,
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
     void** ppvResource) {
-    TRACE("D3D11Device::CreateCommittedResource(%p, %u, %p, %u, %p, %s, %p)\n",
-          pHeapProperties, HeapFlags, pDesc, InitialResourceState,
-          pOptimizedClearValue, debugstr_guid(&riidResource).c_str(),
-          ppvResource);
-    return E_NOTIMPL;
+    TRACE("D3D11Device::CreateCommittedResource called");
+    TRACE("  pHeapProperties: %p\n", pHeapProperties);
+    TRACE("  Height: %d\n", pDesc->Height);
+    TRACE("  Width: %d\n", pDesc->Width);
+    TRACE("  HeapFlags: %d\n", HeapFlags);
+    TRACE("  Alignment: %p\n", pDesc->Alignment);
+    TRACE("  DepthOrArraySize: %p\n", pDesc->DepthOrArraySize);
+    TRACE("  Flags: %p\n", pDesc->Flags);
+    TRACE("  Dimension: %p\n", pDesc->Dimension);
+    TRACE("  Format: %p\n", pDesc->Format);
+    TRACE("  SampleDesc.Count: %p\n", pDesc->SampleDesc.Count);
+    TRACE("  SampleDesc.Quality: %p\n", pDesc->SampleDesc.Quality);
+    TRACE("  Layout: %p\n", pDesc->Layout);
+    TRACE("  InitialResourceState: %d\n", InitialResourceState);
+    TRACE("  pOptimizedClearValue: %p\n", pOptimizedClearValue);
+    TRACE("  riidResource: %s\n", debugstr_guid(&riidResource).c_str());
+    TRACE("  ppvResource: %p\n", ppvResource);
+    
+
+    if (!pHeapProperties || !pDesc || !ppvResource) {
+        ERR("Invalid parameters\n");
+        return E_INVALIDARG;
+    }
+
+    return D3D11Resource::Create(
+        this, pHeapProperties, HeapFlags, pDesc,
+        InitialResourceState, pOptimizedClearValue,
+        riidResource, ppvResource);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateHeap(const D3D12_HEAP_DESC* pDesc,
