@@ -1,4 +1,5 @@
 #include "d3d11_impl/swap_chain.hpp"
+#include "d3d11_impl/resource.hpp"
 
 #include "d3d11_impl/device.hpp"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -237,7 +238,33 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
     // Try to get the underlying D3D12 resource from the base swapchain
     if (riid == __uuidof(ID3D12Resource)) {
         TRACE("Game requesting D3D12 resource for backbuffer\n");
-        return m_base_swapchain->GetBuffer(Buffer, riid, ppSurface);
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = m_width;
+        desc.Height = m_height;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = m_format;
+        desc.SampleDesc = {1, 0};
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+        heapProps.CreationNodeMask = 1;
+        heapProps.VisibleNodeMask = 1;
+
+        return D3D11Resource::Create(
+            m_device,
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            D3D12_RESOURCE_STATE_PRESENT,
+            nullptr,
+            riid,
+            ppSurface);
     }
     TRACE("other interface");
     // For any other interface, try querying our backbuffer
