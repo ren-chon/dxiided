@@ -29,7 +29,6 @@ public:
                                            void** ppvObject) override;
     ULONG STDMETHODCALLTYPE AddRef() override;
     ULONG STDMETHODCALLTYPE Release() override;
-    void DumpBackBufferToImage(UINT bufferIndex);
 
     // IDXGIObject methods
     HRESULT STDMETHODCALLTYPE SetPrivateData(

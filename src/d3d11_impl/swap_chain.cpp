@@ -1,9 +1,8 @@
 #include "d3d11_impl/swap_chain.hpp"
-#include "d3d11_impl/resource.hpp"
 
 #include "d3d11_impl/device.hpp"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "d3d11_impl/stb_image_write.h"
+#include "d3d11_impl/resource.hpp"
+
 namespace dxiided {
 
 HRESULT D3D11SwapChain::Create(
@@ -18,12 +17,12 @@ HRESULT D3D11SwapChain::Create(
     // Get window name
     char window_name[256] = {};
     GetWindowTextA(window, window_name, sizeof(window_name));
-    TRACE(
-        "Creating swap "
-        "chain:\nWidth=%u\nHeight=%u\nFormat=%d\nBufferCount=%u\nWindow "
-        "name:%s",
-        desc->Width, desc->Height, desc->Format, desc->BufferCount,
-        window_name);
+    TRACE("Creating swapchain:");
+    TRACE(" Application name: %s", window_name);
+    TRACE(" Width: %u", desc->Width);
+    TRACE(" Height: %u", desc->Height);
+    TRACE(" Format: %u", desc->Format);
+    TRACE(" BufferCount: %u", desc->BufferCount);
 
     // Validate buffer count
     UINT buffer_count = desc->BufferCount < 1   ? 1
@@ -43,7 +42,9 @@ HRESULT D3D11SwapChain::Create(
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
-    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;  // Allow both RT and SRV
+    swapchain_desc.BufferUsage =
+        DXGI_USAGE_RENDER_TARGET_OUTPUT |
+        DXGI_USAGE_SHADER_INPUT;  // Allow both RT and SRV
     swapchain_desc.BufferCount = buffer_count;
     swapchain_desc.OutputWindow = window;
     swapchain_desc.Windowed =
@@ -174,15 +175,15 @@ HRESULT D3D11SwapChain::InitBackBuffers() {
     // Create RTVs for all buffers
     for (UINT i = 0; i < desc.BufferCount; i++) {
         TRACE("Attempting to get buffer %u of %u", i, desc.BufferCount);
-        
+
         Microsoft::WRL::ComPtr<ID3D11Texture2D> buffer;
         hr = m_base_swapchain->GetBuffer(
             i, __uuidof(ID3D11Texture2D),
             reinterpret_cast<void**>(buffer.GetAddressOf()));
 
         if (FAILED(hr)) {
-            ERR(
-                "Failed to get back buffer %u, hr %#x - this is required for proper operation",
+            ERR("Failed to get back buffer %u, hr %#x - this is required for "
+                "proper operation",
                 i, hr);
             return hr;  // Fail if we can't get all buffers
         }
@@ -212,7 +213,6 @@ HRESULT D3D11SwapChain::InitBackBuffers() {
         m_backbuffers.push_back(std::move(buffer));
         m_renderTargetViews.push_back(std::move(rtv));
         TRACE("Created back buffer %u with RTV", i);
-        DumpBackBufferToImage(i);
     }
 
     // Update actual buffer count
@@ -227,7 +227,7 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
           debugstr_guid(&riid).c_str(), ppSurface);
 
     if (Buffer >= m_buffer_count || !ppSurface) {
-        ERR("Invalid buffer index %u (buffer_count=%u) or null surface pointer", 
+        ERR("Invalid buffer index %u (buffer_count=%u) or null surface pointer",
             Buffer, m_buffer_count);
         return DXGI_ERROR_INVALID_CALL;
     }
@@ -244,7 +244,7 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
     // Try to get the underlying D3D12 resource from the base swapchain
     if (riid == __uuidof(ID3D12Resource)) {
         TRACE("Game requesting D3D12 resource for backbuffer");
-        
+
         // Create resource description for the back buffer
         D3D12_RESOURCE_DESC desc = {};
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -256,7 +256,8 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
         desc.SampleDesc = {1, 0};
         desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-        TRACE("Back buffer description: Width: %u, Height: %u, Format: %d",desc.Width, desc.Height, desc.Format);
+        TRACE("Back buffer description: Width: %u, Height: %u, Format: %d",
+              desc.Width, desc.Height, desc.Format);
 
         // Set up heap properties for the back buffer
         D3D12_HEAP_PROPERTIES heapProps = {};
@@ -265,115 +266,19 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
         heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapProps.CreationNodeMask = 1;
         heapProps.VisibleNodeMask = 1;
-        
+
         // Create D3D11Resource wrapper around the back buffer
         return D3D11Resource::Create(
-            m_device,
-            &heapProps,
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
+            m_device, &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
             D3D12_RESOURCE_STATE_COMMON,
             nullptr,  // No optimized clear value for swap chain
-            riid,
-            ppSurface);
+            riid, ppSurface);
     }
     TRACE("other interface");
     // For any other interface, try querying our backbuffer
     return m_backbuffers[Buffer]->QueryInterface(riid, ppSurface);
 }
 
-void D3D11SwapChain::DumpBackBufferToImage(UINT bufferIndex) {
-    if (bufferIndex >= m_backbuffers.size()) {
-        ERR("Invalid buffer index %u", bufferIndex);
-        return;
-    }
-
-    ID3D11Texture2D* backBuffer = m_backbuffers[bufferIndex].Get();
-    if (!backBuffer) {
-        ERR("Back buffer is null");
-        return;
-    }
-
-    // Get the texture description
-    D3D11_TEXTURE2D_DESC desc;
-    backBuffer->GetDesc(&desc);
-    TRACE("Dumping backbuffer: Format=%d, Width=%u, Height=%u", desc.Format,
-          desc.Width, desc.Height);
-
-    // Create a staging texture for CPU read
-    D3D11_TEXTURE2D_DESC stagingDesc = desc;
-    stagingDesc.Usage = D3D11_USAGE_STAGING;
-    stagingDesc.BindFlags = 0;
-    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-    stagingDesc.MiscFlags = 0;
-
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> stagingTexture;
-    HRESULT hr = m_device->GetD3D11Device()->CreateTexture2D(
-        &stagingDesc, nullptr, &stagingTexture);
-    if (FAILED(hr)) {
-        ERR("Failed to create staging texture, hr %#x", hr);
-        return;
-    }
-
-    // Copy backbuffer to staging texture
-    m_device->GetD3D11Context()->CopyResource(stagingTexture.Get(), backBuffer);
-
-    // Map the staging texture
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    hr = m_device->GetD3D11Context()->Map(stagingTexture.Get(), 0,
-                                          D3D11_MAP_READ, 0, &mapped);
-    if (FAILED(hr)) {
-        ERR("Failed to map staging texture, hr %#x", hr);
-        return;
-    }
-
-    TRACE("Mapped texture: RowPitch=%u, DepthPitch=%u", mapped.RowPitch,
-          mapped.DepthPitch);
-
-    // Allocate buffer for RGBA data
-    std::vector<uint8_t> imageData(desc.Width * desc.Height * 4);
-
-    // Convert from DXGI format to RGBA
-    const uint8_t* src = static_cast<const uint8_t*>(mapped.pData);
-    uint8_t* dst = imageData.data();
-
-    // Debug first few pixels
-    TRACE("First 4 pixels (RGBA): ");
-    for (int i = 0; i < 4; i++) {
-        TRACE("[%u,%u,%u,%u] ", src[i * 4], src[i * 4 + 1], src[i * 4 + 2],
-              src[i * 4 + 3]);
-    }
-    TRACE("");
-
-    for (UINT row = 0; row < desc.Height; row++) {
-        memcpy(dst + row * desc.Width * 4, src + row * mapped.RowPitch,
-               desc.Width * 4);
-    }
-
-    // Debug first few pixels after conversion
-    TRACE("First 4 pixels after conversion (RGBA): ");
-    for (int i = 0; i < 4; i++) {
-        TRACE("[%u,%u,%u,%u] ", dst[i * 4], dst[i * 4 + 1], dst[i * 4 + 2],
-              dst[i * 4 + 3]);
-    }
-    TRACE("");
-
-    // Unmap the staging texture
-    m_device->GetD3D11Context()->Unmap(stagingTexture.Get(), 0);
-
-    // Save as PNG
-    char filename[256];
-    snprintf(filename, sizeof(filename), "backbuffer_%u_%ux%u.png", bufferIndex,
-             desc.Width, desc.Height);
-
-    TRACE("Saving backbuffer to %s", filename);
-    if (!stbi_write_png(filename, desc.Width, desc.Height, 4, imageData.data(),
-                        desc.Width * 4)) {
-        ERR("Failed to write PNG file");
-        return;
-    }
-    TRACE("Successfully wrote PNG file");
-}
 
 void D3D11SwapChain::ReleaseBackBuffers() {
     TRACE("D3D11SwapChain::ReleaseBackBuffers");
@@ -445,12 +350,6 @@ HRESULT STDMETHODCALLTYPE D3D11SwapChain::Present(UINT SyncInterval,
               frame_count, SyncInterval, Flags);
     }
 
-    // Only dump frames 100-110 to ensure we have actual content
-    if (frame_count >= 100 && frame_count <= 110) {
-        TRACE("Capturing frame %d", frame_count);
-        DumpBackBufferToImage(0);
-    }
-
     HRESULT hr = m_base_swapchain->Present(SyncInterval, Flags);
     if (FAILED(hr)) {
         ERR("Present failed, hr %#x", hr);
@@ -460,9 +359,8 @@ HRESULT STDMETHODCALLTYPE D3D11SwapChain::Present(UINT SyncInterval,
 
 HRESULT STDMETHODCALLTYPE
 D3D11SwapChain::SetFullscreenState(BOOL Fullscreen, IDXGIOutput* pTarget) {
-    TRACE(
-        "D3D11SwapChain::SetFullscreenState called: Fullscreen=%d, Target=%p",
-        Fullscreen, pTarget);
+    TRACE("D3D11SwapChain::SetFullscreenState called: Fullscreen=%d, Target=%p",
+          Fullscreen, pTarget);
     return m_base_swapchain->SetFullscreenState(Fullscreen, pTarget);
 }
 
