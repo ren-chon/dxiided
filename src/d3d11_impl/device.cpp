@@ -764,33 +764,75 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommittedResource(
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
     void** ppvResource) {
     TRACE("D3D11Device::CreateCommittedResource called");
-    TRACE("  pHeapProperties: %p", pHeapProperties);
-    TRACE("  Height: %d", pDesc->Height);
-    TRACE("  Width: %d", pDesc->Width);
-    TRACE("  HeapFlags: %d", HeapFlags);
-    TRACE("  Alignment: %p", pDesc->Alignment);
-    TRACE("  DepthOrArraySize: %p", pDesc->DepthOrArraySize);
-    TRACE("  Flags: %p", pDesc->Flags);
-    TRACE("  Dimension: %p", pDesc->Dimension);
-    TRACE("  Format: %p", pDesc->Format);
-    TRACE("  SampleDesc.Count: %p", pDesc->SampleDesc.Count);
-    TRACE("  SampleDesc.Quality: %p", pDesc->SampleDesc.Quality);
-    TRACE("  Layout: %p", pDesc->Layout);
-    TRACE("  InitialResourceState: %d", InitialResourceState);
-    TRACE("  pOptimizedClearValue: %p", pOptimizedClearValue);
-    TRACE("  riidResource: %s", debugstr_guid(&riidResource).c_str());
-    TRACE("  ppvResource: %p", ppvResource);
     
+    // Log heap properties
+    TRACE("Heap Properties:");
+    if (pHeapProperties) {
+        TRACE("  Type: %s", GetD3D12HeapTypeName(pHeapProperties->Type));
+        TRACE("  CPUPageProperty: %s", GetD3D12CPUPagePropertyName(pHeapProperties->CPUPageProperty));
+        TRACE("  MemoryPoolPreference: %s", GetD3D12MemoryPoolName(pHeapProperties->MemoryPoolPreference));
+        TRACE("  CreationNodeMask: 0x%x", pHeapProperties->CreationNodeMask);
+        TRACE("  VisibleNodeMask: 0x%x", pHeapProperties->VisibleNodeMask);
+    } else {
+        TRACE("  pHeapProperties is null");
+    }
 
+    // Log resource description
+    TRACE("Resource Description:");
+    if (pDesc) {
+        TRACE("  Dimension: %s", GetD3D12ResourceDimensionName(pDesc->Dimension));
+        TRACE("  Width: %llu", pDesc->Width);
+        TRACE("  Height: %u", pDesc->Height);
+        TRACE("  DepthOrArraySize: %u", pDesc->DepthOrArraySize);
+        TRACE("  MipLevels: %u", pDesc->MipLevels);
+        TRACE("  Format: %s", GetDXGIFormatName(pDesc->Format));
+        TRACE("  SampleDesc: Count=%u, Quality=%u", 
+              pDesc->SampleDesc.Count, pDesc->SampleDesc.Quality);
+        TRACE("  Layout: %s", GetD3D12TextureLayoutName(pDesc->Layout));
+        TRACE("  Flags: 0x%x", pDesc->Flags);
+    } else {
+        TRACE("  pDesc is null");
+    }
+
+    // Log other parameters
+    TRACE("HeapFlags: 0x%x", HeapFlags);
+    TRACE("InitialResourceState: %s", GetD3D12ResourceStateString(InitialResourceState).c_str());
+    TRACE("pOptimizedClearValue: %p", pOptimizedClearValue);
+    if (pOptimizedClearValue) {
+        TRACE("  Format: %s", GetDXGIFormatName(pOptimizedClearValue->Format));
+    }
+    TRACE("riidResource: %s", debugstr_guid(&riidResource).c_str());
+    TRACE("ppvResource: %p", ppvResource);
+
+    // Validate parameters
     if (!pHeapProperties || !pDesc || !ppvResource) {
-        ERR("Invalid parameters");
+        ERR("Invalid parameters: pHeapProperties=%p, pDesc=%p, ppvResource=%p",
+            pHeapProperties, pDesc, ppvResource);
         return E_INVALIDARG;
     }
 
-    return D3D11Resource::Create(
+    // Validate heap type and CPU page property combinations
+    if (pHeapProperties->Type == D3D12_HEAP_TYPE_CUSTOM) {
+        if (pHeapProperties->CPUPageProperty != D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE &&
+            pHeapProperties->CPUPageProperty != D3D12_CPU_PAGE_PROPERTY_WRITE_BACK) {
+            ERR("Invalid CPU page property %d for custom heap type",
+                pHeapProperties->CPUPageProperty);
+            return E_INVALIDARG;
+        }
+    }
+
+    HRESULT hr = D3D11Resource::Create(
         this, pHeapProperties, HeapFlags, pDesc,
         InitialResourceState, pOptimizedClearValue,
         riidResource, ppvResource);
+
+    if (FAILED(hr)) {
+        ERR("Failed to create resource (hr=%08X)", hr);
+    } else {
+        TRACE("Successfully created resource %p", *ppvResource);
+    }
+
+    return hr;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateHeap(const D3D12_HEAP_DESC* pDesc,
@@ -1124,7 +1166,8 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateGeometryShader(
                                                pClassLinkage, ppGeometryShader);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Device::CreateGeometryShaderWithStreamOutput(
+HRESULT STDMETHODCALLTYPE
+D3D11Device::CreateGeometryShaderWithStreamOutput(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     const D3D11_SO_DECLARATION_ENTRY* pSODeclaration, UINT NumEntries,
     const UINT* pBufferStrides, UINT NumStrides, UINT RasterizedStream,
