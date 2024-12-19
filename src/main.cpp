@@ -30,23 +30,23 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void* reserved) {
 extern "C" HRESULT WINAPI
 D3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL minimum_feature_level,
                   REFIID riid, void** device) {
-    TRACE("adapter %p, minimum_feature_level %#x, riid %s, device %p.\n",
+    TRACE("adapter %p, minimum_feature_level %#x, riid %s, device %p.",
           adapter, minimum_feature_level, debugstr_guid(&riid).c_str(), device);
 
     // If device is null, this is just a capability check
     if (device == nullptr) {
-        TRACE("  Capability check - returning S_FALSE to indicate device could be created\n");
+        TRACE("  Capability check - returning S_FALSE to indicate device could be created");
         return S_FALSE;  // Return S_FALSE to indicate device could be created but wasn't
     }
 
     // It's okay for *device to be null, we'll set it ourselves
     *device = nullptr;
-    TRACE("  Attempting to create device...\n");
+    TRACE("  Attempting to create device...");
     return D3D11Device::Create(adapter, minimum_feature_level, riid, device);
 }
 
 extern "C" HRESULT WINAPI D3D12GetDebugInterface(REFIID riid, void** debug) {
-    TRACE("riid %s, debug %p.\n", debugstr_guid(&riid).c_str(), debug);
+    TRACE("riid %s, debug %p.", debugstr_guid(&riid).c_str(), debug);
 
     if (!debug) {
         return E_INVALIDARG;
@@ -59,7 +59,7 @@ extern "C" HRESULT WINAPI D3D12GetDebugInterface(REFIID riid, void** debug) {
 }
 
 extern "C" HRESULT WINAPI CreateDXGIFactory2(UINT Flags, REFIID riid, void** ppFactory) {
-    TRACE("Flags %u, riid %s, ppFactory %p.\n", Flags, debugstr_guid(&riid).c_str(), ppFactory);
+    TRACE("Flags %u, riid %s, ppFactory %p.", Flags, debugstr_guid(&riid).c_str(), ppFactory);
 
     if (!ppFactory) {
         return E_INVALIDARG;
@@ -74,7 +74,7 @@ extern "C" HRESULT WINAPI D3D12CreateCommandQueue(ID3D12Device* pDevice,
                                                   const D3D12_COMMAND_QUEUE_DESC* pDesc,
                                                   REFIID riid,
                                                   void** ppCommandQueue) {
-    TRACE("pDevice %p, pDesc %p, riid %s, ppCommandQueue %p.\n",
+    TRACE("pDevice %p, pDesc %p, riid %s, ppCommandQueue %p.",
           pDevice, pDesc, debugstr_guid(&riid).c_str(), ppCommandQueue);
 
     if (!pDevice || !pDesc || !ppCommandQueue) {
@@ -90,7 +90,7 @@ extern "C" HRESULT WINAPI D3D12EnableExperimentalFeatures(
     UINT* configurations_sizes) {
     TRACE(
         "feature_count %u, iids %p, configurations %p, configurations_sizes "
-        "%p.\n",
+        "%p.",
         feature_count, iids, configurations, configurations_sizes);
 
     // For MVP, we don't support experimental features
@@ -101,7 +101,7 @@ extern "C" HRESULT WINAPI D3D12SerializeRootSignature(
     const D3D12_ROOT_SIGNATURE_DESC* root_signature_desc,
     D3D_ROOT_SIGNATURE_VERSION version, ID3DBlob** blob,
     ID3DBlob** error_blob) {
-    TRACE("root_signature_desc %p, version %#x, blob %p, error_blob %p.\n",
+    TRACE("root_signature_desc %p, version %#x, blob %p, error_blob %p.",
           root_signature_desc, version, blob, error_blob);
 
     if (!root_signature_desc || !blob) {
@@ -212,14 +212,14 @@ extern "C" HRESULT WINAPI D3D12SerializeRootSignature(
     }
 
     *blob = result;
-    TRACE("Created D3D11 binding blob with %zu bindings\n", d3d11_bindings.size());
+    TRACE("Created D3D11 binding blob with %zu bindings", d3d11_bindings.size());
     return S_OK;
 }
 
 extern "C" HRESULT WINAPI D3D12CreateRootSignatureDeserializer(
     const void* serialized_root_signature,
     SIZE_T serialized_root_signature_size, REFIID riid, void** deserializer) {
-    TRACE("serialized_root_signature %p, serialized_root_signature_size %zu, riid %s, deserializer %p.\n",
+    TRACE("serialized_root_signature %p, serialized_root_signature_size %zu, riid %s, deserializer %p.",
           serialized_root_signature, serialized_root_signature_size, debugstr_guid(&riid).c_str(), deserializer);
 
     if (!serialized_root_signature || !deserializer || serialized_root_signature_size < 16) {
@@ -337,7 +337,7 @@ extern "C" HRESULT WINAPI D3D12CreateRootSignatureDeserializer(
 extern "C" HRESULT WINAPI D3D12CreateVersionedRootSignatureDeserializer(
     const void* serialized_root_signature,
     SIZE_T serialized_root_signature_size, REFIID riid, void** deserializer) {
-    TRACE("serialized_root_signature %p, serialized_root_signature_size %zu, riid %s, deserializer %p.\n",
+    TRACE("serialized_root_signature %p, serialized_root_signature_size %zu, riid %s, deserializer %p.",
           serialized_root_signature, serialized_root_signature_size, debugstr_guid(&riid).c_str(), deserializer);
 
     if (!serialized_root_signature || !deserializer || serialized_root_signature_size < 16) {
@@ -466,7 +466,7 @@ extern "C" HRESULT WINAPI D3D12CreateVersionedRootSignatureDeserializer(
 extern "C" HRESULT WINAPI D3D12SerializeVersionedRootSignature(
     const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* desc, ID3DBlob** blob,
     ID3DBlob** error_blob) {
-    TRACE("desc %p, blob %p, error_blob %p.\n", desc, blob, error_blob);
+    TRACE("desc %p, blob %p, error_blob %p.", desc, blob, error_blob);
 
     // For MVP, we don't implement versioned root signature serialization yet
     return E_NOTIMPL;

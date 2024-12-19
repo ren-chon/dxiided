@@ -18,6 +18,7 @@ std::mutex D3D11ShaderResourceBinding::s_cacheMutex;
 Microsoft::WRL::ComPtr<ID3D11SamplerState>
 D3D11ShaderResourceBinding::GetOrCreateSampler(ID3D11Device* device,
                                                const D3D11_SAMPLER_DESC* desc) {
+    TRACE("D3D11ShaderResourceBinding::GetOrCreateSampler called");
     SamplerKey key;
     key.desc = *desc;
 
@@ -37,7 +38,7 @@ D3D11ShaderResourceBinding::GetOrCreateSampler(ID3D11Device* device,
     Microsoft::WRL::ComPtr<ID3D11SamplerState> sampler;
     HRESULT hr = device->CreateSamplerState(desc, &sampler);
     if (FAILED(hr)) {
-        TRACE("Failed to create sampler state: %08x\n", hr);
+        TRACE("Failed to create sampler state: %08x", hr);
         return nullptr;
     }
 
@@ -49,6 +50,7 @@ Microsoft::WRL::ComPtr<ID3D11Buffer>
 D3D11ShaderResourceBinding::GetOrCreateConstantBuffer(ID3D11Device* device,
                                                       const void* data,
                                                       size_t size) {
+    TRACE("D3D11ShaderResourceBinding::GetOrCreateConstantBuffer called");
     ConstantBufferKey key;
     key.size = size;
     key.data.assign(static_cast<const uint8_t*>(data),
@@ -73,7 +75,7 @@ D3D11ShaderResourceBinding::GetOrCreateConstantBuffer(ID3D11Device* device,
     Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
     HRESULT hr = device->CreateBuffer(&desc, &initData, &buffer);
     if (FAILED(hr)) {
-        ERR("Failed to create constant buffer, hr %#x.\n", hr);
+        ERR("Failed to create constant buffer, hr %#x.", hr);
         return nullptr;
     }
 
@@ -83,6 +85,7 @@ D3D11ShaderResourceBinding::GetOrCreateConstantBuffer(ID3D11Device* device,
 
 void D3D11ShaderResourceBinding::ApplyBindings(ID3D11DeviceContext* context,
                                                const BindingState& state) {
+        TRACE("D3D11ShaderResourceBinding::ApplyBindings called");
     // Set shader resources
     if (!state.srvs.empty()) {
         std::vector<ID3D11ShaderResourceView*> srvPtrs(state.srvs.size());

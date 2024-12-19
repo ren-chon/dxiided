@@ -7,7 +7,7 @@ namespace dxiided {
 HRESULT D3D11DescriptorHeap::Create(D3D11Device* device,
                                     const D3D12_DESCRIPTOR_HEAP_DESC* desc,
                                     REFIID riid, void** ppvHeap) {
-    TRACE("D3D11DescriptorHeap::Create(%p, %p, %s, %p)\n", device, desc,
+    TRACE("D3D11DescriptorHeap::Create(%p, %p, %s, %p)", device, desc,
           debugstr_guid(&riid).c_str(), ppvHeap);
 
     if (!device || !desc || !ppvHeap) {
@@ -23,7 +23,7 @@ HRESULT D3D11DescriptorHeap::Create(D3D11Device* device,
 D3D11DescriptorHeap::D3D11DescriptorHeap(D3D11Device* device,
                                          const D3D12_DESCRIPTOR_HEAP_DESC* desc)
     : m_device(device), m_desc(*desc) {
-    TRACE("D3D11DescriptorHeap::D3D11DescriptorHeap(%p, %p)\n", device, desc);
+    TRACE("D3D11DescriptorHeap::D3D11DescriptorHeap(%p, %p)", device, desc);
 
     // Calculate storage size based on descriptor count and type
     size_t descriptorSize =
@@ -40,7 +40,7 @@ D3D11DescriptorHeap::D3D11DescriptorHeap(D3D11Device* device,
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE
 D3D11DescriptorHeap::QueryInterface(REFIID riid, void** ppvObject) {
-    TRACE("D3D11DescriptorHeap::QueryInterface called: %s, %p\n",
+    TRACE("D3D11DescriptorHeap::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -55,21 +55,21 @@ D3D11DescriptorHeap::QueryInterface(REFIID riid, void** ppvObject) {
         return S_OK;
     }
 
-    WARN("D3D11DescriptorHeap::QueryInterface: Unknown interface query %s\n",
+    WARN("D3D11DescriptorHeap::QueryInterface: Unknown interface query %s",
          debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE D3D11DescriptorHeap::AddRef() {
     ULONG refCount = ++m_refCount;
-    TRACE("D3D11DescriptorHeap::AddRef %p increasing refcount to %lu.\n", this,
+    TRACE("D3D11DescriptorHeap::AddRef %p increasing refcount to %lu.", this,
           refCount);
     return refCount;
 }
 
 ULONG STDMETHODCALLTYPE D3D11DescriptorHeap::Release() {
     ULONG refCount = --m_refCount;
-    TRACE("D3D11DescriptorHeap::Release %p decreasing refcount to %lu.\n", this,
+    TRACE("D3D11DescriptorHeap::Release %p decreasing refcount to %lu.", this,
           refCount);
     if (refCount == 0) {
         delete this;
@@ -81,7 +81,7 @@ ULONG STDMETHODCALLTYPE D3D11DescriptorHeap::Release() {
 HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::GetPrivateData(REFGUID guid,
                                                               UINT* pDataSize,
                                                               void* pData) {
-    TRACE("D3D11DescriptorHeap::GetPrivateData %s, %p, %p\n",
+    TRACE("D3D11DescriptorHeap::GetPrivateData %s, %p, %p",
           debugstr_guid(&guid).c_str(), pDataSize, pData);
           FIXME("D3D11DescriptorHeap::GetPrivateData Not implemented");
     // Not implemented
@@ -90,7 +90,7 @@ HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::GetPrivateData(REFGUID guid,
 
 HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::SetPrivateData(
     REFGUID guid, UINT DataSize, const void* pData) {
-    TRACE("D3D11DescriptorHeap::SetPrivateData %s, %u, %p\n",
+    TRACE("D3D11DescriptorHeap::SetPrivateData %s, %u, %p",
           debugstr_guid(&guid).c_str(), DataSize, pData);
           FIXME("D3D11DescriptorHeap::SetPrivateData Not implemented");
     // Not implemented
@@ -99,7 +99,7 @@ HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::SetPrivateData(
 
 HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::SetPrivateDataInterface(
     REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11DescriptorHeap::SetPrivateDataInterface %s, %p\n",
+    TRACE("D3D11DescriptorHeap::SetPrivateDataInterface %s, %p",
           debugstr_guid(&guid).c_str(), pData);
     FIXME("D3D11DescriptorHeap::SetPrivateDataInterface Not implemented");
     // Not implemented
@@ -107,14 +107,14 @@ HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::SetPrivateDataInterface(
 }
 
 HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::SetName(LPCWSTR Name) {
-    TRACE("D3D11DescriptorHeap::SetName %ls\n", Name);
+    TRACE("D3D11DescriptorHeap::SetName %ls", Name);
     return S_OK;
 }
 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::GetDevice(REFIID riid,
                                                          void** ppvDevice) {
-    TRACE("D3D11DescriptorHeap::GetDevice %s, %p\n",
+    TRACE("D3D11DescriptorHeap::GetDevice %s, %p",
           debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
@@ -122,7 +122,7 @@ HRESULT STDMETHODCALLTYPE D3D11DescriptorHeap::GetDevice(REFIID riid,
 // ID3D12DescriptorHeap methods
 D3D12_DESCRIPTOR_HEAP_DESC* STDMETHODCALLTYPE
 D3D11DescriptorHeap::GetDesc(D3D12_DESCRIPTOR_HEAP_DESC* desc) {
-    TRACE("D3D11DescriptorHeap::GetDesc %p\n", desc);
+    TRACE("D3D11DescriptorHeap::GetDesc %p", desc);
     *desc = m_desc;
     return desc;
 }
@@ -130,7 +130,7 @@ D3D11DescriptorHeap::GetDesc(D3D12_DESCRIPTOR_HEAP_DESC* desc) {
 D3D12_CPU_DESCRIPTOR_HANDLE* STDMETHODCALLTYPE
 D3D11DescriptorHeap::GetCPUDescriptorHandleForHeapStart(
     D3D12_CPU_DESCRIPTOR_HANDLE* handle) {
-    TRACE("D3D11DescriptorHeap::GetCPUDescriptorHandleForHeapStart called\n");
+    TRACE("D3D11DescriptorHeap::GetCPUDescriptorHandleForHeapStart called");
     *handle = m_cpuHandle;
     return handle;
 }
@@ -138,7 +138,7 @@ D3D11DescriptorHeap::GetCPUDescriptorHandleForHeapStart(
 D3D12_GPU_DESCRIPTOR_HANDLE* STDMETHODCALLTYPE
 D3D11DescriptorHeap::GetGPUDescriptorHandleForHeapStart(
     D3D12_GPU_DESCRIPTOR_HANDLE* handle) {
-    TRACE("D3D11DescriptorHeap::GetGPUDescriptorHandleForHeapStart called\n");
+    TRACE("D3D11DescriptorHeap::GetGPUDescriptorHandleForHeapStart called");
     *handle = m_gpuHandle;
     return handle;
 }

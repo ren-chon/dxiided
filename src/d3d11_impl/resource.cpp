@@ -12,7 +12,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
                               const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                               REFIID riid, void** ppvResource) {
     TRACE(
-        "D3D11Resource::Create called with: %p, %p, %#x, %p, %#x, %p, %s, %p\n",
+        "D3D11Resource::Create called with: %p, %p, %#x, %p, %#x, %p, %s, %p",
         device, pHeapProperties, HeapFlags, pDesc, InitialState,
         pOptimizedClearValue, debugstr_guid(&riid).c_str(), ppvResource);
 
@@ -25,7 +25,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         device, pHeapProperties, HeapFlags, pDesc, InitialState);
 
     if (!resource->GetD3D11Resource()) {
-        ERR("Failed to create D3D11 resource.\n");
+        ERR("Failed to create D3D11 resource.");
         return E_FAIL;
     }
 
@@ -38,7 +38,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
                              D3D12_RESOURCE_STATES InitialState,
                              REFIID riid, void** ppvResource) {
     if (!device || !resource || !pDesc || !ppvResource) {
-        WARN("Invalid parameters: device=%p, resource=%p, pDesc=%p, ppvResource=%p\n",
+        WARN("Invalid parameters: device=%p, resource=%p, pDesc=%p, ppvResource=%p",
               device, resource, pDesc, ppvResource);
         return E_INVALIDARG;
     }
@@ -47,7 +47,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         device, resource, pDesc, InitialState);
 
     if (!wrapper->GetD3D11Resource()) {
-        ERR("Failed to wrap D3D11 resource.\n");
+        ERR("Failed to wrap D3D11 resource.");
         return E_FAIL;
     }
 
@@ -64,7 +64,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
       m_heapProperties(*pHeapProperties),
       m_heapFlags(HeapFlags),
       m_currentState(InitialState) {
-    TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u\n",
+    TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u",
           pDesc->Dimension, pDesc->Format, pDesc->Width, pDesc->Height);
 
     D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc);
@@ -88,7 +88,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
                 &bufferDesc, nullptr, &buffer);
             if (FAILED(hr)) {
-                ERR("Failed to create buffer, hr %#x.\n", hr);
+                ERR("Failed to create buffer, hr %#x.", hr);
                 return;
             }
             m_resource = buffer;
@@ -115,7 +115,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             HRESULT hr = m_device->GetD3D11Device()->CreateTexture1D(
                 &texDesc, nullptr, &texture);
             if (FAILED(hr)) {
-                ERR("Failed to create texture 1D, hr %#x.\n", hr);
+                ERR("Failed to create texture 1D, hr %#x.", hr);
                 return;
             }
             m_resource = texture;
@@ -144,7 +144,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             HRESULT hr = m_device->GetD3D11Device()->CreateTexture2D(
                 &texDesc, nullptr, &texture);
             if (FAILED(hr)) {
-                ERR("Failed to create texture 2D, hr %#x.\n", hr);
+                ERR("Failed to create texture 2D, hr %#x.", hr);
                 return;
             }
             m_resource = texture;
@@ -172,7 +172,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             HRESULT hr = m_device->GetD3D11Device()->CreateTexture3D(
                 &texDesc, nullptr, &texture);
             if (FAILED(hr)) {
-                ERR("Failed to create texture 3D, hr %#x.\n", hr);
+                ERR("Failed to create texture 3D, hr %#x.", hr);
                 return;
             }
             m_resource = texture;
@@ -180,7 +180,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
             break;
         }
         default:
-            ERR("Unsupported resource dimension %d.\n", pDesc->Dimension);
+            ERR("Unsupported resource dimension %d.", pDesc->Dimension);
             break;
     }
 }
@@ -216,24 +216,24 @@ void D3D11Resource::StoreInDeviceMap() {
                 __uuidof(ID3D11Resource),
                 m_resource.Get());
 
-            TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p\n", 
+            TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p", 
                   this, m_resource.Get());
         }
     }
 }
 
 UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
-    TRACE("GetMiscFlags called\n");
-    TRACE("  Alignment: %llu\n", pDesc->Alignment);
-    TRACE("  Dimension: %x\n", pDesc->Dimension);
-    TRACE("  DepthOrArraySize: %x\n", pDesc->DepthOrArraySize);
-    TRACE("  MipLevels: %x\n", pDesc->MipLevels);
-    TRACE("  Format: %x\n", pDesc->Format);
-    TRACE("  Flags: %x\n", pDesc->Flags);
-    TRACE("  Height: %x\n", pDesc->Height);
-    TRACE("  Width: %x\n", pDesc->Width);
-    TRACE("  SampleDesc Count: %x\n", pDesc->SampleDesc.Count);
-    TRACE("  SampleDesc Quality: %x\n", pDesc->SampleDesc.Quality);
+    TRACE("GetMiscFlags called");
+    TRACE("  Alignment: %llu", pDesc->Alignment);
+    TRACE("  Dimension: %x", pDesc->Dimension);
+    TRACE("  DepthOrArraySize: %x", pDesc->DepthOrArraySize);
+    TRACE("  MipLevels: %x", pDesc->MipLevels);
+    TRACE("  Format: %x", pDesc->Format);
+    TRACE("  Flags: %x", pDesc->Flags);
+    TRACE("  Height: %x", pDesc->Height);
+    TRACE("  Width: %x", pDesc->Width);
+    TRACE("  SampleDesc Count: %x", pDesc->SampleDesc.Count);
+    TRACE("  SampleDesc Quality: %x", pDesc->SampleDesc.Quality);
 
     UINT flags = 0;
 
@@ -254,13 +254,13 @@ UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
         flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
     }
 
-    TRACE("GetMiscFlags returns %#x\n", flags);
+    TRACE("GetMiscFlags returns %#x", flags);
     return flags;
 }
 
 void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
                                  D3D12_RESOURCE_STATES newState) {
-    TRACE("D3D11Resource::TransitionTo %p, %#x -> %#x\n", context,
+    TRACE("D3D11Resource::TransitionTo %p, %#x -> %#x", context,
           m_currentState, newState);
 
     // No need to transition if states are the same
@@ -271,7 +271,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
     // Handle UAV barriers
     if (newState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ||
         m_currentState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
-        TRACE("UAV barrier\n");
+        TRACE("UAV barrier");
         context->CSSetUnorderedAccessViews(0, 1, nullptr, nullptr);
         m_isUAV = (newState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
@@ -281,7 +281,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
          newState != D3D12_RESOURCE_STATE_RENDER_TARGET) ||
         (m_currentState != D3D12_RESOURCE_STATE_RENDER_TARGET &&
          newState == D3D12_RESOURCE_STATE_RENDER_TARGET)) {
-        TRACE("RT barrier\n");
+        TRACE("RT barrier");
         context->Flush();
     }
 
@@ -290,7 +290,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
          newState != D3D12_RESOURCE_STATE_DEPTH_WRITE) ||
         (m_currentState != D3D12_RESOURCE_STATE_DEPTH_WRITE &&
          newState == D3D12_RESOURCE_STATE_DEPTH_WRITE)) {
-        TRACE("DS barrier\n");
+        TRACE("DS barrier");
         context->Flush();
     }
 
@@ -298,7 +298,7 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
 }
 
 void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
-    TRACE("D3D11Resource::UAVBarrier %p\n", context);
+    TRACE("D3D11Resource::UAVBarrier %p", context);
 
     if (m_isUAV) {
         // Ensure UAV writes are completed
@@ -309,7 +309,7 @@ void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
 
 void D3D11Resource::AliasingBarrier(ID3D11DeviceContext* context,
                                     D3D11Resource* pResourceAfter) {
-    TRACE("D3D11Resource::AliasingBarrier %p, %p\n", context, pResourceAfter);
+    TRACE("D3D11Resource::AliasingBarrier %p, %p", context, pResourceAfter);
 
     // Ensure all operations on both resources are completed
     context->Flush();
@@ -348,12 +348,12 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
     }
 
-    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x\n", pDesc->Flags, flags);
+    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x", pDesc->Flags, flags);
     return flags;
 }
 
 DXGI_FORMAT D3D11Resource::GetViewFormat(DXGI_FORMAT format) {
-    TRACE("D3D11Resource::GetViewFormat called with %d\n", format);
+    TRACE("D3D11Resource::GetViewFormat called with %d", format);
     switch (format) {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
             return DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -410,7 +410,7 @@ D3D11_USAGE D3D11Resource::GetD3D11Usage(
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11Resource::QueryInterface(REFIID riid,
                                                         void** ppvObject) {
-    TRACE("D3D11Resource::QueryInterface called: %s, %p\n",
+    TRACE("D3D11Resource::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -418,25 +418,25 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::QueryInterface(REFIID riid,
     }
 
     if (riid == __uuidof(ID3D12Resource) || riid == __uuidof(IUnknown)) {
-        TRACE("D3D11Resource::QueryInterface returning ID3D12Resource\n");
+        TRACE("D3D11Resource::QueryInterface returning ID3D12Resource");
         AddRef();
         *ppvObject = this;
         return S_OK;
     }
 
-    WARN("Unknown interface %s.\n", debugstr_guid(&riid).c_str());
+    WARN("Unknown interface %s.", debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Resource::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
-    TRACE("%p increasing refcount to %u.\n", this, ref);
+    TRACE("%p increasing refcount to %u.", this, ref);
     return ref;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Resource::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
-    TRACE("%p decreasing refcount to %u.\n", this, ref);
+    TRACE("%p decreasing refcount to %u.", this, ref);
     if (ref == 0) {
         delete this;
     }
@@ -447,7 +447,7 @@ ULONG STDMETHODCALLTYPE D3D11Resource::Release() {
 HRESULT STDMETHODCALLTYPE D3D11Resource::GetPrivateData(REFGUID guid,
                                                         UINT* pDataSize,
                                                         void* pData) {
-    TRACE("D3D11Resource::GetPrivateData called: %s, %p, %p\n",
+    TRACE("D3D11Resource::GetPrivateData called: %s, %p, %p",
           debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_resource->GetPrivateData(guid, pDataSize, pData);
 }
@@ -455,20 +455,20 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::GetPrivateData(REFGUID guid,
 HRESULT STDMETHODCALLTYPE D3D11Resource::SetPrivateData(REFGUID guid,
                                                         UINT DataSize,
                                                         const void* pData) {
-    TRACE("D3D11Resource::SetPrivateData %s, %u, %p\n",
+    TRACE("D3D11Resource::SetPrivateData %s, %u, %p",
           debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_resource->SetPrivateData(guid, DataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11Resource::SetPrivateDataInterface %s, %p\n",
+    TRACE("D3D11Resource::SetPrivateDataInterface %s, %p",
           debugstr_guid(&guid).c_str(), pData);
     return m_resource->SetPrivateDataInterface(guid, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Resource::SetName(LPCWSTR Name) {
-    TRACE("D3D11Resource::SetName %s\n", debugstr_w(Name).c_str());
+    TRACE("D3D11Resource::SetName %s", debugstr_w(Name).c_str());
     return m_resource->SetPrivateData(
         WKPDID_D3DDebugObjectName,
         static_cast<UINT>((wcslen(Name) + 1) * sizeof(WCHAR)), Name);
@@ -477,7 +477,7 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::SetName(LPCWSTR Name) {
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11Resource::GetDevice(REFIID riid,
                                                    void** ppvDevice) {
-    TRACE("D3D11Resource::GetDevice %s, %p\n", debugstr_guid(&riid).c_str(),
+    TRACE("D3D11Resource::GetDevice %s, %p", debugstr_guid(&riid).c_str(),
           ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
@@ -486,7 +486,7 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::GetDevice(REFIID riid,
 HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
                                              const D3D12_RANGE* pReadRange,
                                              void** ppData) {
-    TRACE("D3D11Resource::Map %u, %p, %p\n", Subresource, pReadRange, ppData);
+    TRACE("D3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
 
     // For ring buffers, use NO_OVERWRITE to preserve existing data
     D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -499,7 +499,7 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
                                                  &mappedResource);
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
-        TRACE("Mapped %p\n", mappedResource.pData);
+        TRACE("Mapped %p", mappedResource.pData);
     }
 
     return hr;
@@ -507,23 +507,23 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
 
 void STDMETHODCALLTYPE D3D11Resource::Unmap(UINT Subresource,
                                             const D3D12_RANGE* pWrittenRange) {
-    TRACE("D3D11Resource::Unmap %u, %p\n", Subresource, pWrittenRange);
+    TRACE("D3D11Resource::Unmap %u, %p", Subresource, pWrittenRange);
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
 D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
     if (pDesc) {
-        TRACE("D3D11Resource::GetDesc(%p)\n", pDesc);
-        TRACE("  Dimension: %d\n", m_desc.Dimension);
-        TRACE("  Alignment: %llu\n", m_desc.Alignment);
-        TRACE("  Width: %llu\n", m_desc.Width);
-        TRACE("  Height: %u\n", m_desc.Height);
-        TRACE("  DepthOrArraySize: %hu\n", m_desc.DepthOrArraySize);
-        TRACE("  MipLevels: %hu\n", m_desc.MipLevels);
-        TRACE("  Format: %d\n", m_desc.Format);
-        TRACE("  SampleDesc.Count: %u\n", m_desc.SampleDesc.Count);
-        TRACE("  SampleDesc.Quality: %u\n", m_desc.SampleDesc.Quality);
-        TRACE("  Layout: %d\n", m_desc.Layout);
+        TRACE("D3D11Resource::GetDesc(%p)", pDesc);
+        TRACE("  Dimension: %d", m_desc.Dimension);
+        TRACE("  Alignment: %llu", m_desc.Alignment);
+        TRACE("  Width: %llu", m_desc.Width);
+        TRACE("  Height: %u", m_desc.Height);
+        TRACE("  DepthOrArraySize: %hu", m_desc.DepthOrArraySize);
+        TRACE("  MipLevels: %hu", m_desc.MipLevels);
+        TRACE("  Format: %d", m_desc.Format);
+        TRACE("  SampleDesc.Count: %u", m_desc.SampleDesc.Count);
+        TRACE("  SampleDesc.Quality: %u", m_desc.SampleDesc.Quality);
+        TRACE("  Layout: %d", m_desc.Layout);
         *pDesc = m_desc;
     }
     return pDesc;
@@ -531,14 +531,14 @@ D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DES
 
 D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
 D3D11Resource::GetGPUVirtualAddress() {
-    TRACE("D3D11Resource::GetGPUVirtualAddress called\n");
+    TRACE("D3D11Resource::GetGPUVirtualAddress called");
     return m_gpuAddress;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Resource::WriteToSubresource(
     UINT DstSubresource, const D3D12_BOX* pDstBox, const void* pSrcData,
     UINT SrcRowPitch, UINT SrcDepthPitch) {
-    TRACE("D3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u\n",
+    TRACE("D3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u",
           DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch);
 
     m_device->GetD3D11Context()->UpdateSubresource(
@@ -552,18 +552,18 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::WriteToSubresource(
 HRESULT STDMETHODCALLTYPE D3D11Resource::ReadFromSubresource(
     void* pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource,
     const D3D12_BOX* pSrcBox) {
-    TRACE("D3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p\n", pDstData,
+    TRACE("D3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p", pDstData,
           DstRowPitch, DstDepthPitch, SrcSubresource, pSrcBox);
 
     // D3D11 doesn't have a direct equivalent for reading from a subresource
     // We need to create a staging resource and copy the data
-    FIXME("ReadFromSubresource not implemented yet.\n");
+    FIXME("ReadFromSubresource not implemented yet.");
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Resource::GetHeapProperties(
     D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS* pHeapFlags) {
-    TRACE("D3D11Resource::GetHeapProperties %p, %p\n", pHeapProperties,
+    TRACE("D3D11Resource::GetHeapProperties %p, %p", pHeapProperties,
           pHeapFlags);
 
     if (pHeapProperties) {

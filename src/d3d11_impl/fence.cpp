@@ -6,7 +6,7 @@ namespace dxiided {
 
 HRESULT D3D11Fence::Create(D3D11Device* device, UINT64 initial_value,
                           D3D12_FENCE_FLAGS flags, REFIID riid, void** fence) {
-    TRACE("D3D11Fence::Create(%p, %llu, %u, %s, %p)\n", device, initial_value, flags,
+    TRACE("D3D11Fence::Create(%p, %llu, %u, %s, %p)", device, initial_value, flags,
           debugstr_guid(&riid).c_str(), fence);
 
     if (!device || !fence) {
@@ -25,13 +25,13 @@ D3D11Fence::D3D11Fence(D3D11Device* device, UINT64 initial_value,
       m_flags(flags),
       m_value(initial_value),
       m_completed_value(initial_value) {
-    TRACE("D3D11Fence::D3D11Fence(%p, %llu, %u)\n", device, initial_value, flags);
+    TRACE("D3D11Fence::D3D11Fence(%p, %llu, %u)", device, initial_value, flags);
 }
 
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11Fence::QueryInterface(REFIID riid,
                                                     void** ppvObject) {
-    TRACE("D3D11Fence::QueryInterface called: %s, %p\n",
+    TRACE("D3D11Fence::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -45,20 +45,20 @@ HRESULT STDMETHODCALLTYPE D3D11Fence::QueryInterface(REFIID riid,
         return S_OK;
     }
 
-    WARN("D3D11Fence::QueryInterface: Unknown interface query %s\n",
+    WARN("D3D11Fence::QueryInterface: Unknown interface query %s",
          debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Fence::AddRef() {
     ULONG refCount = ++m_refCount;
-    TRACE("D3D11Fence::AddRef %p increasing refcount to %lu.\n", this, refCount);
+    TRACE("D3D11Fence::AddRef %p increasing refcount to %lu.", this, refCount);
     return refCount;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Fence::Release() {
     ULONG refCount = --m_refCount;
-    TRACE("D3D11Fence::Release %p decreasing refcount to %lu.\n", this, refCount);
+    TRACE("D3D11Fence::Release %p decreasing refcount to %lu.", this, refCount);
     if (refCount == 0) {
         delete this;
     }
@@ -86,7 +86,7 @@ HRESULT STDMETHODCALLTYPE D3D11Fence::SetPrivateDataInterface(
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Fence::SetName(LPCWSTR Name) {
-    TRACE("D3D11Fence::SetName %ls\n", Name);
+    TRACE("D3D11Fence::SetName %ls", Name);
     return S_OK;
 }
 

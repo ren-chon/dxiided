@@ -68,6 +68,8 @@ Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
 D3D11ResourceViewCache::GetOrCreateSRV(
     ID3D11Device* device, D3D11Resource* resource,
     const D3D11_SHADER_RESOURCE_VIEW_DESC* desc) {
+        TRACE("D3D11ResourceViewCache::GetOrCreateSRV called");
+
     ViewKey key;
     key.resource = resource;
     key.type = 0;
@@ -89,7 +91,7 @@ D3D11ResourceViewCache::GetOrCreateSRV(
     HRESULT hr = device->CreateShaderResourceView(resource->GetD3D11Resource(),
                                                   desc, &srv);
     if (FAILED(hr)) {
-        ERR("Failed to create SRV, hr %#x.\n", hr);
+        ERR("Failed to create SRV, hr %#x.", hr);
         return nullptr;
     }
 
@@ -101,6 +103,8 @@ Microsoft::WRL::ComPtr<ID3D11RenderTargetView>
 D3D11ResourceViewCache::GetOrCreateRTV(
     ID3D11Device* device, D3D11Resource* resource,
     const D3D11_RENDER_TARGET_VIEW_DESC* desc) {
+        TRACE("D3D11ResourceViewCache::GetOrCreateRTV called");
+
     ViewKey key;
     key.resource = resource;
     key.type = 1;
@@ -122,7 +126,7 @@ D3D11ResourceViewCache::GetOrCreateRTV(
     HRESULT hr = device->CreateRenderTargetView(resource->GetD3D11Resource(),
                                                 desc, &rtv);
     if (FAILED(hr)) {
-        ERR("Failed to create RTV, hr %#x.\n", hr);
+        ERR("Failed to create RTV, hr %#x.", hr);
         return nullptr;
     }
 
@@ -134,6 +138,8 @@ Microsoft::WRL::ComPtr<ID3D11DepthStencilView>
 D3D11ResourceViewCache::GetOrCreateDSV(
     ID3D11Device* device, D3D11Resource* resource,
     const D3D11_DEPTH_STENCIL_VIEW_DESC* desc) {
+        TRACE("D3D11ResourceViewCache::GetOrCreateDSV called");
+
     ViewKey key;
     key.resource = resource;
     key.type = 2;
@@ -155,7 +161,7 @@ D3D11ResourceViewCache::GetOrCreateDSV(
     HRESULT hr = device->CreateDepthStencilView(resource->GetD3D11Resource(),
                                                 desc, &dsv);
     if (FAILED(hr)) {
-        ERR("Failed to create DSV, hr %#x.\n", hr);
+        ERR("Failed to create DSV, hr %#x.", hr);
         return nullptr;
     }
 
@@ -167,6 +173,7 @@ Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView>
 D3D11ResourceViewCache::GetOrCreateUAV(
     ID3D11Device* device, D3D11Resource* resource,
     const D3D11_UNORDERED_ACCESS_VIEW_DESC* desc) {
+        TRACE("D3D11ResourceViewCache::GetOrCreateUAV");
     ViewKey key;
     key.resource = resource;
     key.type = 3;
@@ -188,7 +195,7 @@ D3D11ResourceViewCache::GetOrCreateUAV(
     HRESULT hr = device->CreateUnorderedAccessView(resource->GetD3D11Resource(),
                                                    desc, &uav);
     if (FAILED(hr)) {
-        ERR("Failed to create UAV, hr %#x.\n", hr);
+        ERR("Failed to create UAV, hr %#x.", hr);
         return nullptr;
     }
 

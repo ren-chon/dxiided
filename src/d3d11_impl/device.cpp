@@ -28,7 +28,7 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
                             D3D_FEATURE_LEVEL minimum_feature_level,
                             REFIID riid, void** device) {
     if (!device) {
-        ERR("Invalid device pointer.\n");
+        ERR("Invalid device pointer.");
         return E_INVALIDARG;
     }
 
@@ -36,23 +36,23 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
 
     Microsoft::WRL::ComPtr<IDXGIAdapter> dxgi_adapter;
     if (adapter) {
-        TRACE("  Attempting to get DXGI adapter from provided adapter %p\n",
+        TRACE("  Attempting to get DXGI adapter from provided adapter %p",
               adapter);
         HRESULT hr = adapter->QueryInterface(IID_PPV_ARGS(&dxgi_adapter));
         if (FAILED(hr)) {
-            ERR("Failed to get DXGI adapter (hr=%#x).\n", hr);
+            ERR("Failed to get DXGI adapter (hr=%#x).", hr);
             // Try to get the adapter's IID for debugging
             IID iid;
             if (SUCCEEDED(
                     adapter->QueryInterface(IID_IUnknown, (void**)&iid))) {
-                ERR("Adapter implements IID: %s\n",
+                ERR("Adapter implements IID: %s",
                     debugstr_guid(&iid).c_str());
             }
             return E_INVALIDARG;
         }
-        TRACE("  Successfully got DXGI adapter %p\n", dxgi_adapter.Get());
+        TRACE("  Successfully got DXGI adapter %p", dxgi_adapter.Get());
     } else {
-        TRACE("  No adapter provided, using default\n");
+        TRACE("  No adapter provided, using default");
     }
 
     // Create D3D11 device
@@ -62,7 +62,7 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
 
     // Only enable BGRA support, don't enable debug by default
     UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    TRACE("  Creating D3D11 device with flags 0x%x\n", flags);
+    TRACE("  Creating D3D11 device with flags 0x%x", flags);
 
     // Try feature levels in descending order
     D3D_FEATURE_LEVEL feature_levels[] = {
@@ -76,30 +76,30 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
         D3D11_SDK_VERSION, &d3d11_device, &feature_level, &d3d11_context);
 
     if (FAILED(hr)) {
-        ERR("D3D11CreateDevice failed with error %#x.\n", hr);
+        ERR("D3D11CreateDevice failed with error %#x.", hr);
         return hr;
     }
-    TRACE("  D3D11 device created successfully with feature level %#x\n",
+    TRACE("  D3D11 device created successfully with feature level %#x",
           feature_level);
 
     // Create our device wrapper
     D3D11Device* d3d12_device =
         new D3D11Device(d3d11_device, d3d11_context, feature_level);
     if (!d3d12_device) {
-        ERR("Failed to allocate device wrapper.\n");
+        ERR("Failed to allocate device wrapper.");
         return E_OUTOFMEMORY;
     }
-    TRACE("  Created D3D12 device wrapper %p\n", d3d12_device);
+    TRACE("  Created D3D12 device wrapper %p", d3d12_device);
 
     // Query for the requested interface
     hr = d3d12_device->QueryInterface(riid, device);
     if (FAILED(hr)) {
-        ERR("Failed to query for requested interface %s.\n",
+        ERR("Failed to query for requested interface %s.",
             debugstr_guid(&riid).c_str());
         d3d12_device->Release();
         return hr;
     }
-    TRACE("  Successfully queried for interface %s\n",
+    TRACE("  Successfully queried for interface %s",
           debugstr_guid(&riid).c_str());
     return S_OK;
 }
@@ -107,7 +107,7 @@ HRESULT D3D11Device::Create(IUnknown* adapter,
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
                                                       void** ppvObject) {
-    TRACE("D3D11Device::QueryInterface called for %s, %p\n",
+    TRACE("D3D11Device::QueryInterface called for %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
     if (ppvObject == nullptr) return E_POINTER;
@@ -118,7 +118,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
     if (IsEqualGUID(riid, __uuidof(ID3D11Device)) ||
         IsEqualGUID(riid, __uuidof(ID3D11Device1)) ||
         IsEqualGUID(riid, __uuidof(ID3D11Device2))) {
-        TRACE("Returning ID3D11Device interface\n");
+        TRACE("Returning ID3D11Device interface");
         *ppvObject = reinterpret_cast<ID3D11Device*>(this);
         AddRef();
         return S_OK;
@@ -128,7 +128,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
     if (IsEqualGUID(riid, __uuidof(ID3D12Device)) ||
         IsEqualGUID(riid, __uuidof(ID3D12Device1)) ||
         IsEqualGUID(riid, __uuidof(ID3D12Device2))) {
-        TRACE("Returning ID3D12Device interface\n");
+        TRACE("Returning ID3D12Device interface");
         *ppvObject = static_cast<ID3D12Device2*>(this);
         AddRef();
         return S_OK;
@@ -136,7 +136,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
 
     // IUnknown - use ID3D12Device2 as primary interface
     if (IsEqualGUID(riid, __uuidof(IUnknown))) {
-        TRACE("Returning IUnknown interface\n");
+        TRACE("Returning IUnknown interface");
         *ppvObject = static_cast<ID3D12Device2*>(this);
         AddRef();
         return S_OK;
@@ -144,30 +144,30 @@ HRESULT STDMETHODCALLTYPE D3D11Device::QueryInterface(REFIID riid,
 
     // Resource interfaces
     if (IsEqualGUID(riid, __uuidof(ID3D12Resource))) {
-        TRACE("Handle ID3D12Resource interface request\n");
+        TRACE("Handle ID3D12Resource interface request");
         if (m_d3d11Device) {
             return m_d3d11Device->QueryInterface(riid, ppvObject);
         }
         return E_NOINTERFACE;
     }
 
-    WARN("Unknown interface query %s\n", debugstr_guid(&riid).c_str());
+    WARN("Unknown interface query %s", debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Device::AddRef() {
-    TRACE("D3D11Device::AddRef called on object %p\n", this);
+    TRACE("D3D11Device::AddRef called on object %p", this);
     ULONG ref = InterlockedIncrement(&m_refCount);
-    TRACE("  New refcount: %lu\n", ref);
+    TRACE("  New refcount: %lu", ref);
     return ref;
 }
 
 ULONG STDMETHODCALLTYPE D3D11Device::Release() {
-    TRACE("D3D11Device::Release called on object %p\n", this);
+    TRACE("D3D11Device::Release called on object %p", this);
     ULONG ref = InterlockedDecrement(&m_refCount);
-    TRACE("  New refcount: %lu\n", ref);
+    TRACE("  New refcount: %lu", ref);
     if (ref == 0) {
-        TRACE("  Deleting object %p\n", this);
+        TRACE("  Deleting object %p", this);
         delete this;
     }
     return ref;
@@ -199,14 +199,14 @@ HRESULT STDMETHODCALLTYPE D3D11Device::SetName(LPCWSTR Name) {
 
 // ID3D12Device methods
 UINT STDMETHODCALLTYPE D3D11Device::GetNodeCount() {
-    TRACE("D3D11Device::GetNodeCount called on object %p\n", this);
+    TRACE("D3D11Device::GetNodeCount called on object %p", this);
     return 1;  // D3D11 doesn't support multiple nodes
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommandQueue(
     const D3D12_COMMAND_QUEUE_DESC* pDesc, REFIID riid, void** ppCommandQueue) {
-    TRACE("D3D11Device::CreateCommandQueue called on object %p\n", this);
-    TRACE("  Desc: %p, riid: %s, ppCommandQueue: %p\n", pDesc,
+    TRACE("D3D11Device::CreateCommandQueue called on object %p", this);
+    TRACE("  Desc: %p, riid: %s, ppCommandQueue: %p", pDesc,
           debugstr_guid(&riid).c_str(), ppCommandQueue);
 
     return D3D11CommandQueue::Create(this, pDesc, riid, ppCommandQueue);
@@ -214,8 +214,8 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommandQueue(
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommandAllocator(
     D3D12_COMMAND_LIST_TYPE type, REFIID riid, void** ppCommandAllocator) {
-    TRACE("D3D11Device::CreateCommandAllocator called on object %p\n", this);
-    TRACE("  Type: %d, riid: %s, ppCommandAllocator: %p\n", type,
+    TRACE("D3D11Device::CreateCommandAllocator called on object %p", this);
+    TRACE("  Type: %d, riid: %s, ppCommandAllocator: %p", type,
           debugstr_guid(&riid).c_str(), ppCommandAllocator);
     return E_NOTIMPL;
 }
@@ -224,7 +224,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateGraphicsPipelineState(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc, REFIID riid,
     void** ppPipelineState) {
     // TODO: Implement graphics pipeline state creation
-    FIXME("Graphics pipeline state creation not implemented yet.\n");
+    FIXME("Graphics pipeline state creation not implemented yet.");
     return E_NOTIMPL;
 }
 
@@ -232,7 +232,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateComputePipelineState(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc, REFIID riid,
     void** ppPipelineState) {
     // TODO: Implement compute pipeline state creation
-    FIXME("Compute pipeline state creation not implemented yet.\n");
+    FIXME("Compute pipeline state creation not implemented yet.");
     return E_NOTIMPL;
 }
 
@@ -241,14 +241,14 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommandList(
     ID3D12CommandAllocator* pCommandAllocator,
     ID3D12PipelineState* pInitialState, REFIID riid, void** ppCommandList) {
     // TODO: Implement command list creation
-    FIXME("Command list creation not implemented yet.\n");
+    FIXME("Command list creation not implemented yet.");
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDescriptorHeap(
     const D3D12_DESCRIPTOR_HEAP_DESC* pDescriptorHeapDesc, REFIID riid,
     void** ppvHeap) {
-    TRACE("D3D11Device::CreateDescriptorHeap(%p, %s, %p)\n",
+    TRACE("D3D11Device::CreateDescriptorHeap(%p, %s, %p)",
           pDescriptorHeapDesc, debugstr_guid(&riid).c_str(), ppvHeap);
     return D3D11DescriptorHeap::Create(this, pDescriptorHeapDesc, riid,
                                        ppvHeap);
@@ -268,7 +268,7 @@ UINT STDMETHODCALLTYPE D3D11Device::GetDescriptorHandleIncrementSize(
         case D3D12_DESCRIPTOR_HEAP_TYPE_DSV:
             return 32;
         default:
-            ERR("Unknown descriptor heap type %d.\n", DescriptorHeapType);
+            ERR("Unknown descriptor heap type %d.", DescriptorHeapType);
             return 0;
     }
 }
@@ -276,13 +276,13 @@ UINT STDMETHODCALLTYPE D3D11Device::GetDescriptorHandleIncrementSize(
 HRESULT STDMETHODCALLTYPE D3D11Device::CheckFeatureSupport(
     D3D12_FEATURE Feature, void* pFeatureSupportData,
     UINT FeatureSupportDataSize) {
-    TRACE("D3D11Device::CheckFeatureSupport BEGIN on object %p\n", this);
-    TRACE("  Feature: 0x%x (%d)\n", Feature, Feature);
-    TRACE("  pFeatureSupportData: %p\n", pFeatureSupportData);
-    TRACE("  FeatureSupportDataSize: %u\n", FeatureSupportDataSize);
+    TRACE("D3D11Device::CheckFeatureSupport BEGIN on object %p", this);
+    TRACE("  Feature: 0x%x (%d)", Feature, Feature);
+    TRACE("  pFeatureSupportData: %p", pFeatureSupportData);
+    TRACE("  FeatureSupportDataSize: %u", FeatureSupportDataSize);
 
     if (!pFeatureSupportData) {
-        ERR("Invalid feature support data pointer\n");
+        ERR("Invalid feature support data pointer");
         return E_INVALIDARG;
     }
     // Zero out memory first
@@ -434,7 +434,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CheckFeatureSupport(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateRootSignature(
     UINT nodeMask, const void* pBlobWithRootSignature, SIZE_T blobLengthInBytes,
     REFIID riid, void** ppvRootSignature) {
-    TRACE("D3D11Device::CreateRootSignature(%u, %p, %zu, %s, %p)\n", nodeMask,
+    TRACE("D3D11Device::CreateRootSignature(%u, %p, %zu, %s, %p)", nodeMask,
           pBlobWithRootSignature, blobLengthInBytes,
           debugstr_guid(&riid).c_str(), ppvRootSignature);
     return E_NOTIMPL;
@@ -443,12 +443,12 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateRootSignature(
 void STDMETHODCALLTYPE D3D11Device::CreateConstantBufferView(
     const D3D12_CONSTANT_BUFFER_VIEW_DESC* pDesc,
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-    TRACE("D3D11Device::CreateConstantBufferView called\n");
-    TRACE("  BufferLocation: %p\n", pDesc->BufferLocation);
-    TRACE("  SizeInBytes: %u\n", pDesc->SizeInBytes);
+    TRACE("D3D11Device::CreateConstantBufferView called");
+    TRACE("  BufferLocation: %p", pDesc->BufferLocation);
+    TRACE("  SizeInBytes: %u", pDesc->SizeInBytes);
 
     if (!pDesc) {
-        ERR("No constant buffer view description provided.\n");
+        ERR("No constant buffer view description provided.");
         return;
     }
 
@@ -469,24 +469,24 @@ void STDMETHODCALLTYPE D3D11Device::CreateConstantBufferView(
 void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
     ID3D12Resource* pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC* pDesc,
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-    TRACE("D3D11Device::CreateShaderResourceView called\n");
-    TRACE("  Resource: %p\n", pResource);
-    TRACE("  Format: %p\n", pDesc->Format);
-    TRACE("  ViewDimension: %d\n", pDesc->ViewDimension);
-    TRACE("  Shader4ComponentMapping: %d\n", pDesc->Shader4ComponentMapping);
-    TRACE("  Buffer FirstElement: %d\n", pDesc->Buffer.FirstElement);
-    TRACE("  Buffer NumElements: %d\n", pDesc->Buffer.NumElements);
-    TRACE("  Texture2D MipLevels: %d\n", pDesc->Texture2D.MipLevels);
-    TRACE("  DestDescriptor: %p\n", (void*)DestDescriptor.ptr);
+    TRACE("D3D11Device::CreateShaderResourceView called");
+    TRACE("  Resource: %p", pResource);
+    TRACE("  Format: %p", pDesc->Format);
+    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    TRACE("  Shader4ComponentMapping: %d", pDesc->Shader4ComponentMapping);
+    TRACE("  Buffer FirstElement: %d", pDesc->Buffer.FirstElement);
+    TRACE("  Buffer NumElements: %d", pDesc->Buffer.NumElements);
+    TRACE("  Texture2D MipLevels: %d", pDesc->Texture2D.MipLevels);
+    TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for shader resource view.\n");
+        ERR("No resource provided for shader resource view.");
         return;
     }
 
     ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
     if (!d3d11Resource) {
-        ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
+        ERR("D3D11 resource not found for D3D12 resource %p", pResource);
         return;
     }
 
@@ -500,24 +500,24 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
             D3D11_TEXTURE2D_DESC desc;
             texture->GetDesc(&desc);
             
-            TRACE("D3D11 Resource properties:\n");
-            TRACE("  Format: %d\n", desc.Format);
-            TRACE("  BindFlags: %d\n", desc.BindFlags);
-            TRACE("  MipLevels: %d\n", desc.MipLevels);
+            TRACE("D3D11 Resource properties:");
+            TRACE("  Format: %d", desc.Format);
+            TRACE("  BindFlags: %d", desc.BindFlags);
+            TRACE("  MipLevels: %d", desc.MipLevels);
             
             if (!(desc.BindFlags & D3D11_BIND_SHADER_RESOURCE)) {
-                ERR("Resource was not created with D3D11_BIND_SHADER_RESOURCE flag (flags=%d)\n", desc.BindFlags);
+                ERR("Resource was not created with D3D11_BIND_SHADER_RESOURCE flag (flags=%d)", desc.BindFlags);
                 return;
             }
         }
     }
 
-    TRACE("Creating SRV with format %d, dimension %d\n", pDesc->Format, pDesc->ViewDimension);
+    TRACE("Creating SRV with format %d, dimension %d", pDesc->Format, pDesc->ViewDimension);
 
     // Create default SRV description if none provided
     D3D11_SHADER_RESOURCE_VIEW_DESC d3d11Desc = {};
     if (pDesc) {
-        TRACE("pDesc provided\n");
+        TRACE("pDesc provided");
         // Convert D3D12 description to D3D11
         d3d11Desc.Format = static_cast<DXGI_FORMAT>(pDesc->Format);
         d3d11Desc.ViewDimension =
@@ -525,16 +525,16 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
 
         switch (pDesc->ViewDimension) {
             case D3D12_SRV_DIMENSION_TEXTURE2D:
-                TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched\n");
+                TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched");
                 d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
                 d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;  // Use D3D12's requested mip levels
                 break;
             default:
-                ERR("Unsupported view dimension: %d\n", pDesc->ViewDimension);
+                ERR("Unsupported view dimension: %d", pDesc->ViewDimension);
                 return;
         }
     } else {
-        TRACE("No pDesc provided\n");
+        TRACE("No pDesc provided");
         // Get resource properties
         D3D12_RESOURCE_DESC resDesc = {};
         pResource->GetDesc(&resDesc);
@@ -545,14 +545,14 @@ void STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
         d3d11Desc.Texture2D.MipLevels = -1;  // Use all mips
     }
 
-    TRACE("Store view in descriptor heap\n");
+    TRACE("Store view in descriptor heap");
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
     HRESULT hr = m_d3d11Device->CreateShaderResourceView(
         d3d11Resource,
         &d3d11Desc,  // Always use our translated description
         &srv);
     if (FAILED(hr)) {
-        ERR("Failed to create D3D11 shader resource view, hr %#x\n", hr);
+        ERR("Failed to create D3D11 shader resource view, hr %#x", hr);
         return;
     }
 
@@ -567,21 +567,21 @@ void STDMETHODCALLTYPE D3D11Device::CreateUnorderedAccessView(
     ID3D12Resource* pResource, ID3D12Resource* pCounterResource,
     const D3D12_UNORDERED_ACCESS_VIEW_DESC* pDesc,
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-    TRACE("D3D11Device::CreateUnorderedAccessView called\n");
-    TRACE("  Resource: %p\n", pResource);
-    TRACE("  CounterResource: %p\n", pCounterResource);
-    TRACE("  Format: %p\n", pDesc->Format);
-    TRACE("  ViewDimension: %d\n", pDesc->ViewDimension);
-    TRACE("  DestDescriptor: %p\n", (void*)DestDescriptor.ptr);
+    TRACE("D3D11Device::CreateUnorderedAccessView called");
+    TRACE("  Resource: %p", pResource);
+    TRACE("  CounterResource: %p", pCounterResource);
+    TRACE("  Format: %p", pDesc->Format);
+    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for unordered access view.\n");
+        ERR("No resource provided for unordered access view.");
         return;
     }
 
     ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
     if (!d3d11Resource) {
-        ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
+        ERR("D3D11 resource not found for D3D12 resource %p", pResource);
         return;
     }
 
@@ -589,7 +589,7 @@ void STDMETHODCALLTYPE D3D11Device::CreateUnorderedAccessView(
     HRESULT hr =
         m_d3d11Device->CreateUnorderedAccessView(d3d11Resource, nullptr, &uav);
     if (FAILED(hr)) {
-        ERR("Failed to create D3D11 unordered access view, hr %#x\n", hr);
+        ERR("Failed to create D3D11 unordered access view, hr %#x", hr);
         return;
     }
 
@@ -602,20 +602,20 @@ void STDMETHODCALLTYPE D3D11Device::CreateUnorderedAccessView(
 void STDMETHODCALLTYPE D3D11Device::CreateRenderTargetView(
     ID3D12Resource* pResource, const D3D12_RENDER_TARGET_VIEW_DESC* pDesc,
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-    TRACE("D3D11Device::CreateRenderTargetView called\n");
-    TRACE("  Resource: %p\n", pResource);
-    TRACE("  Format: %p\n", pDesc->Format);
-    TRACE("  ViewDimension: %d\n", pDesc->ViewDimension);
-    TRACE("  DestDescriptor: %p\n", (void*)DestDescriptor.ptr);
+    TRACE("D3D11Device::CreateRenderTargetView called");
+    TRACE("  Resource: %p", pResource);
+    TRACE("  Format: %p", pDesc->Format);
+    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for render target view.\n");
+        ERR("No resource provided for render target view.");
         return;
     }
 
     ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
     if (!d3d11Resource) {
-        ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
+        ERR("D3D11 resource not found for D3D12 resource %p", pResource);
         return;
     }
 
@@ -623,7 +623,7 @@ void STDMETHODCALLTYPE D3D11Device::CreateRenderTargetView(
     HRESULT hr =
         m_d3d11Device->CreateRenderTargetView(d3d11Resource, nullptr, &rtv);
     if (FAILED(hr)) {
-        ERR("Failed to create D3D11 render target view, hr %#x\n", hr);
+        ERR("Failed to create D3D11 render target view, hr %#x", hr);
         return;
     }
 
@@ -636,20 +636,20 @@ void STDMETHODCALLTYPE D3D11Device::CreateRenderTargetView(
 void STDMETHODCALLTYPE D3D11Device::CreateDepthStencilView(
     ID3D12Resource* pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC* pDesc,
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-    TRACE("D3D11Device::CreateDepthStencilView called\n");
-    TRACE("  Resource: %p\n", pResource);
-    TRACE("  Format: %p\n", pDesc->Format);
-    TRACE("  ViewDimension: %d\n", pDesc->ViewDimension);
-    TRACE("  DestDescriptor: %p\n", (void*)DestDescriptor.ptr);
+    TRACE("D3D11Device::CreateDepthStencilView called");
+    TRACE("  Resource: %p", pResource);
+    TRACE("  Format: %p", pDesc->Format);
+    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for depth stencil view.\n");
+        ERR("No resource provided for depth stencil view.");
         return;
     }
 
     ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
     if (!d3d11Resource) {
-        ERR("D3D11 resource not found for D3D12 resource %p\n", pResource);
+        ERR("D3D11 resource not found for D3D12 resource %p", pResource);
         return;
     }
 
@@ -657,7 +657,7 @@ void STDMETHODCALLTYPE D3D11Device::CreateDepthStencilView(
     HRESULT hr =
         m_d3d11Device->CreateDepthStencilView(d3d11Resource, nullptr, &dsv);
     if (FAILED(hr)) {
-        ERR("Failed to create D3D11 depth stencil view, hr %#x\n", hr);
+        ERR("Failed to create D3D11 depth stencil view, hr %#x", hr);
         return;
     }
 
@@ -670,20 +670,20 @@ void STDMETHODCALLTYPE D3D11Device::CreateDepthStencilView(
 void STDMETHODCALLTYPE D3D11Device::CreateSampler(const D3D12_SAMPLER_DESC* pDesc,
                            D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
     TRACE("D3D11Device::CreateSampler called");
-    TRACE("  Filter: %d\n", pDesc->Filter);
-    TRACE("  AddressU: %d\n", pDesc->AddressU);
-    TRACE("  AddressV: %d\n", pDesc->AddressV);
-    TRACE("  AddressW: %d\n", pDesc->AddressW);
-    TRACE("  MipLODBias: %f\n", pDesc->MipLODBias);
-    TRACE("  MaxAnisotropy: %d\n", pDesc->MaxAnisotropy);
-    TRACE("  ComparisonFunc: %d\n", pDesc->ComparisonFunc);
-    TRACE("  BorderColor: %f %f %f %f\n", pDesc->BorderColor[0],
+    TRACE("  Filter: %d", pDesc->Filter);
+    TRACE("  AddressU: %d", pDesc->AddressU);
+    TRACE("  AddressV: %d", pDesc->AddressV);
+    TRACE("  AddressW: %d", pDesc->AddressW);
+    TRACE("  MipLODBias: %f", pDesc->MipLODBias);
+    TRACE("  MaxAnisotropy: %d", pDesc->MaxAnisotropy);
+    TRACE("  ComparisonFunc: %d", pDesc->ComparisonFunc);
+    TRACE("  BorderColor: %f %f %f %f", pDesc->BorderColor[0],
           pDesc->BorderColor[1], pDesc->BorderColor[2], pDesc->BorderColor[3]);
-    TRACE("  MinLOD: %f\n", pDesc->MinLOD);
-    TRACE("  MaxLOD: %f\n", pDesc->MaxLOD);
+    TRACE("  MinLOD: %f", pDesc->MinLOD);
+    TRACE("  MaxLOD: %f", pDesc->MaxLOD);
 
     if (!pDesc) {
-        ERR("No sampler description provided.\n");
+        ERR("No sampler description provided.");
         return;
     }
 
@@ -708,7 +708,7 @@ void STDMETHODCALLTYPE D3D11Device::CreateSampler(const D3D12_SAMPLER_DESC* pDes
     Microsoft::WRL::ComPtr<ID3D11SamplerState> sampler;
     HRESULT hr = m_d3d11Device->CreateSamplerState(&d3d11Desc, &sampler);
     if (FAILED(hr)) {
-        ERR("Failed to create D3D11 sampler state, hr %#x\n", hr);
+        ERR("Failed to create D3D11 sampler state, hr %#x", hr);
         return;
     }
 
@@ -725,7 +725,7 @@ void STDMETHODCALLTYPE D3D11Device::CopyDescriptors(
     const D3D12_CPU_DESCRIPTOR_HANDLE* pSrcDescriptorRangeStarts,
     const UINT* pSrcDescriptorRangeSizes,
     D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapsType) {
-    TRACE("D3D11Device::CopyDescriptors(%u, %p, %p, %u, %p, %p, %d)\n",
+    TRACE("D3D11Device::CopyDescriptors(%u, %p, %p, %u, %p, %p, %d)",
           NumDestDescriptorRanges, pDestDescriptorRangeStarts,
           pDestDescriptorRangeSizes, NumSrcDescriptorRanges,
           pSrcDescriptorRangeStarts, pSrcDescriptorRangeSizes,
@@ -736,7 +736,7 @@ void STDMETHODCALLTYPE D3D11Device::CopyDescriptorsSimple(
     UINT NumDescriptors, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptorRangeStart,
     D3D12_CPU_DESCRIPTOR_HANDLE SrcDescriptorRangeStart,
     D3D12_DESCRIPTOR_HEAP_TYPE DescriptorHeapsType) {
-    TRACE("D3D11Device::CopyDescriptorsSimple(%u, %p, %p, %d)\n",
+    TRACE("D3D11Device::CopyDescriptorsSimple(%u, %p, %p, %d)",
           NumDescriptors, (void*)DestDescriptorRangeStart.ptr,
           (void*)SrcDescriptorRangeStart.ptr, DescriptorHeapsType);
 }
@@ -745,14 +745,14 @@ D3D12_RESOURCE_ALLOCATION_INFO* STDMETHODCALLTYPE
 D3D11Device::GetResourceAllocationInfo(
     D3D12_RESOURCE_ALLOCATION_INFO* info, UINT visibleMask,
     UINT numResourceDescs, const D3D12_RESOURCE_DESC* pResourceDescs) {
-    TRACE("D3D11Device::GetResourceAllocationInfo(%p, %u, %u, %p)\n", info,
+    TRACE("D3D11Device::GetResourceAllocationInfo(%p, %u, %u, %p)", info,
           visibleMask, numResourceDescs, pResourceDescs);
     return info;
 }
 
 D3D12_HEAP_PROPERTIES* STDMETHODCALLTYPE D3D11Device::GetCustomHeapProperties(
     D3D12_HEAP_PROPERTIES* props, UINT nodeMask, D3D12_HEAP_TYPE heapType) {
-    TRACE("D3D11Device::GetCustomHeapProperties(%p, %u, %d)\n", props, nodeMask,
+    TRACE("D3D11Device::GetCustomHeapProperties(%p, %u, %d)", props, nodeMask,
           heapType);
     return props;
 }
@@ -764,26 +764,26 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommittedResource(
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riidResource,
     void** ppvResource) {
     TRACE("D3D11Device::CreateCommittedResource called");
-    TRACE("  pHeapProperties: %p\n", pHeapProperties);
-    TRACE("  Height: %d\n", pDesc->Height);
-    TRACE("  Width: %d\n", pDesc->Width);
-    TRACE("  HeapFlags: %d\n", HeapFlags);
-    TRACE("  Alignment: %p\n", pDesc->Alignment);
-    TRACE("  DepthOrArraySize: %p\n", pDesc->DepthOrArraySize);
-    TRACE("  Flags: %p\n", pDesc->Flags);
-    TRACE("  Dimension: %p\n", pDesc->Dimension);
-    TRACE("  Format: %p\n", pDesc->Format);
-    TRACE("  SampleDesc.Count: %p\n", pDesc->SampleDesc.Count);
-    TRACE("  SampleDesc.Quality: %p\n", pDesc->SampleDesc.Quality);
-    TRACE("  Layout: %p\n", pDesc->Layout);
-    TRACE("  InitialResourceState: %d\n", InitialResourceState);
-    TRACE("  pOptimizedClearValue: %p\n", pOptimizedClearValue);
-    TRACE("  riidResource: %s\n", debugstr_guid(&riidResource).c_str());
-    TRACE("  ppvResource: %p\n", ppvResource);
+    TRACE("  pHeapProperties: %p", pHeapProperties);
+    TRACE("  Height: %d", pDesc->Height);
+    TRACE("  Width: %d", pDesc->Width);
+    TRACE("  HeapFlags: %d", HeapFlags);
+    TRACE("  Alignment: %p", pDesc->Alignment);
+    TRACE("  DepthOrArraySize: %p", pDesc->DepthOrArraySize);
+    TRACE("  Flags: %p", pDesc->Flags);
+    TRACE("  Dimension: %p", pDesc->Dimension);
+    TRACE("  Format: %p", pDesc->Format);
+    TRACE("  SampleDesc.Count: %p", pDesc->SampleDesc.Count);
+    TRACE("  SampleDesc.Quality: %p", pDesc->SampleDesc.Quality);
+    TRACE("  Layout: %p", pDesc->Layout);
+    TRACE("  InitialResourceState: %d", InitialResourceState);
+    TRACE("  pOptimizedClearValue: %p", pOptimizedClearValue);
+    TRACE("  riidResource: %s", debugstr_guid(&riidResource).c_str());
+    TRACE("  ppvResource: %p", ppvResource);
     
 
     if (!pHeapProperties || !pDesc || !ppvResource) {
-        ERR("Invalid parameters\n");
+        ERR("Invalid parameters");
         return E_INVALIDARG;
     }
 
@@ -795,21 +795,21 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateCommittedResource(
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateHeap(const D3D12_HEAP_DESC* pDesc,
                                                   REFIID riid, void** ppvHeap) {
-    TRACE("D3D11Device::CreateHeap called\n");
-    TRACE("  Flags: %p\n", pDesc->Flags);
-    TRACE("  Size: %llu\n", pDesc->SizeInBytes);
-    TRACE("  Alignment: %llu\n", pDesc->Alignment);
-    TRACE("  CPUPageProperty: %d\n", pDesc->Properties.CPUPageProperty);
-    TRACE("  MemoryPoolPreference: %d\n",
+    TRACE("D3D11Device::CreateHeap called");
+    TRACE("  Flags: %p", pDesc->Flags);
+    TRACE("  Size: %llu", pDesc->SizeInBytes);
+    TRACE("  Alignment: %llu", pDesc->Alignment);
+    TRACE("  CPUPageProperty: %d", pDesc->Properties.CPUPageProperty);
+    TRACE("  MemoryPoolPreference: %d",
           pDesc->Properties.MemoryPoolPreference);
-    TRACE("  CreationNodeMask: %u\n", pDesc->Properties.CreationNodeMask);
-    TRACE("  Type: %u\n", pDesc->Properties.Type);
-    TRACE("  VisibleNodeMask: %u\n", pDesc->Properties.VisibleNodeMask);
-    TRACE("  riid: %s\n", debugstr_guid(&riid).c_str());
-    TRACE("  ppvHeap: %p\n", ppvHeap);
+    TRACE("  CreationNodeMask: %u", pDesc->Properties.CreationNodeMask);
+    TRACE("  Type: %u", pDesc->Properties.Type);
+    TRACE("  VisibleNodeMask: %u", pDesc->Properties.VisibleNodeMask);
+    TRACE("  riid: %s", debugstr_guid(&riid).c_str());
+    TRACE("  ppvHeap: %p", ppvHeap);
 
     if (!pDesc || !ppvHeap) {
-        ERR("Invalid parameters: pDesc=%p, ppvHeap=%p\n", pDesc, ppvHeap);
+        ERR("Invalid parameters: pDesc=%p, ppvHeap=%p", pDesc, ppvHeap);
         return E_INVALIDARG;
     }
 
@@ -823,7 +823,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePlacedResource(
     D3D12_RESOURCE_STATES InitialState,
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid,
     void** ppvResource) {
-    TRACE("D3D11Device::CreatePlacedResource called for %s\n",
+    TRACE("D3D11Device::CreatePlacedResource called for %s",
           debugstr_guid(&riid).c_str());
     TRACE("  Dimension: %d", pDesc->Dimension);
     TRACE("  Alignment: %llu", pDesc->Alignment);
@@ -845,7 +845,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePlacedResource(
     // Get the D3D11Heap from the D3D12Heap
     D3D11Heap* heap = static_cast<D3D11Heap*>(pHeap);
     if (!heap) {
-        ERR("Invalid heap\n");
+        ERR("Invalid heap");
         return E_INVALIDARG;
     }
 
@@ -862,7 +862,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateReservedResource(
     const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState,
     const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid,
     void** ppvResource) {
-    TRACE("D3D11Device::CreateReservedResource(%p, %u, %p, %s, %p)\n", pDesc,
+    TRACE("D3D11Device::CreateReservedResource(%p, %u, %p, %s, %p)", pDesc,
           InitialState, pOptimizedClearValue, debugstr_guid(&riid).c_str(),
           ppvResource);
     return E_NOTIMPL;
@@ -871,7 +871,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateReservedResource(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateSharedHandle(
     ID3D12DeviceChild* pObject, const SECURITY_ATTRIBUTES* pAttributes,
     DWORD Access, LPCWSTR Name, HANDLE* pHandle) {
-    TRACE("D3D11Device::CreateSharedHandle(%p, %p, %u, %s, %p)\n", pObject,
+    TRACE("D3D11Device::CreateSharedHandle(%p, %p, %u, %s, %p)", pObject,
           pAttributes, Access, debugstr_w(Name).c_str(), pHandle);
     return E_NOTIMPL;
 }
@@ -879,27 +879,27 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateSharedHandle(
 HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedHandle(HANDLE NTHandle,
                                                         REFIID riid,
                                                         void** ppvObj) {
-    TRACE("D3D11Device::OpenSharedHandle(%p, %s, %p)\n", NTHandle,
+    TRACE("D3D11Device::OpenSharedHandle(%p, %s, %p)", NTHandle,
           debugstr_guid(&riid).c_str(), ppvObj);
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Device::OpenSharedHandleByName(LPCWSTR Name, DWORD Access, HANDLE* pNTHandle) {
-    TRACE("D3D11Device::OpenSharedHandleByName(%s, %u, %p)\n",
+    TRACE("D3D11Device::OpenSharedHandleByName(%s, %u, %p)",
           debugstr_w(Name).c_str(), Access, pNTHandle);
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::MakeResident(UINT NumObjects,
                                              ID3D12Pageable* const* ppObjects) {
-    TRACE("D3D11Device::MakeResident(%u, %p)\n", NumObjects, ppObjects);
+    TRACE("D3D11Device::MakeResident(%u, %p)", NumObjects, ppObjects);
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::Evict(UINT NumObjects,
                                              ID3D12Pageable* const* ppObjects) {
-    TRACE("D3D11Device::Evict(%u, %p)\n", NumObjects, ppObjects);
+    TRACE("D3D11Device::Evict(%u, %p)", NumObjects, ppObjects);
     return E_NOTIMPL;
 }
 
@@ -907,23 +907,23 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateFence(UINT64 InitialValue,
                                                    D3D12_FENCE_FLAGS Flags,
                                                    REFIID riid,
                                                    void** ppFence) {
-    TRACE("D3D11Device::CreateFence(%llu, %u, %s, %p)\n", InitialValue, Flags,
+    TRACE("D3D11Device::CreateFence(%llu, %u, %s, %p)", InitialValue, Flags,
           debugstr_guid(&riid).c_str(), ppFence);
     return D3D11Fence::Create(this, InitialValue, Flags, riid, ppFence);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::GetDeviceRemovedReason() {
-    TRACE("D3D11Device::GetDeviceRemovedReason() called\n");
+    TRACE("D3D11Device::GetDeviceRemovedReason() called");
 
     if (!m_d3d11Device) {
-        ERR("No D3D11 device\n");
+        ERR("No D3D11 device");
         return DXGI_ERROR_DEVICE_REMOVED;
     }
 
     // Check the underlying D3D11 device state
     HRESULT hr = m_d3d11Device->GetDeviceRemovedReason();
     if (FAILED(hr)) {
-        ERR("D3D11 device removed with reason: %#x\n", hr);
+        ERR("D3D11 device removed with reason: %#x", hr);
         return hr;
     }
 
@@ -937,20 +937,20 @@ void STDMETHODCALLTYPE D3D11Device::GetCopyableFootprints(
     UINT64* pRowSizeInBytes, UINT64* pTotalBytes) {
     TRACE(
         "D3D11Device::GetCopyableFootprints(%p, %u, %u, %llu, %p, %p, %p, "
-        "%p)\n",
+        "%p)",
         pResourceDesc, FirstSubresource, NumSubresources, BaseOffset, pLayouts,
         pNumRows, pRowSizeInBytes, pTotalBytes);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateQueryHeap(
     const D3D12_QUERY_HEAP_DESC* pDesc, REFIID riid, void** ppvHeap) {
-    TRACE("D3D11Device::CreateQueryHeap(%p, %s, %p)\n", pDesc,
+    TRACE("D3D11Device::CreateQueryHeap(%p, %s, %p)", pDesc,
           debugstr_guid(&riid).c_str(), ppvHeap);
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::SetStablePowerState(BOOL Enable) {
-    TRACE("D3D11Device::SetStablePowerState(%d)\n", Enable);
+    TRACE("D3D11Device::SetStablePowerState(%d)", Enable);
     return E_NOTIMPL;
 }
 
@@ -958,7 +958,7 @@ HRESULT STDMETHODCALLTYPE
 D3D11Device::CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC* pDesc,
                                     ID3D12RootSignature* pRootSignature,
                                     REFIID riid, void** ppvCommandSignature) {
-    TRACE("D3D11Device::CreateCommandSignature(%p, %p, %s, %p)\n", pDesc,
+    TRACE("D3D11Device::CreateCommandSignature(%p, %p, %s, %p)", pDesc,
           pRootSignature, debugstr_guid(&riid).c_str(), ppvCommandSignature);
     return E_NOTIMPL;
 }
@@ -969,14 +969,14 @@ void STDMETHODCALLTYPE D3D11Device::GetResourceTiling(
     D3D12_TILE_SHAPE* pStandardTileShapeForNonPackedMips,
     UINT* pNumSubresourceTilings, UINT FirstSubresourceTilingToGet,
     D3D12_SUBRESOURCE_TILING* pSubresourceTilingsForNonPackedMips) {
-    TRACE("D3D11Device::GetResourceTiling(%p, %p, %p, %p, %p, %u, %p)\n",
+    TRACE("D3D11Device::GetResourceTiling(%p, %p, %p, %p, %p, %u, %p)",
           pTiledResource, pNumTilesForEntireResource, pPackedMipDesc,
           pStandardTileShapeForNonPackedMips, pNumSubresourceTilings,
           FirstSubresourceTilingToGet, pSubresourceTilingsForNonPackedMips);
 }
 
 LUID* STDMETHODCALLTYPE D3D11Device::GetAdapterLuid(LUID* pLuid) {
-    TRACE("D3D11Device::GetAdapterLuid(%p)\n", pLuid);
+    TRACE("D3D11Device::GetAdapterLuid(%p)", pLuid);
     return pLuid;
 }
 
@@ -985,17 +985,17 @@ HRESULT STDMETHODCALLTYPE D3D11Device::SetEventOnMultipleFenceCompletion(
     ID3D12Fence* const* ppFences, const UINT64* pFenceValues, UINT NumFences,
     D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags, HANDLE hEvent) {
     TRACE(
-        "D3D11Device::SetEventOnMultipleFenceCompletion called on object %p\n",
+        "D3D11Device::SetEventOnMultipleFenceCompletion called on object %p",
         this);
-    WARN("Multiple fence completion events are not supported.\n");
+    WARN("Multiple fence completion events are not supported.");
     return E_NOTIMPL;
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* pDesc,
                                  REFIID riid, void** ppPipelineState) {
-    TRACE("D3D11Device::CreatePipelineState called on object %p\n", this);
-    TRACE("  Desc: %p, riid: %s, ppPipelineState: %p\n", pDesc,
+    TRACE("D3D11Device::CreatePipelineState called on object %p", this);
+    TRACE("  Desc: %p, riid: %s, ppPipelineState: %p", pDesc,
           debugstr_guid(&riid).c_str(), ppPipelineState);
     return E_NOTIMPL;
 }
@@ -1004,8 +1004,8 @@ D3D11Device::CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* pDesc,
 HRESULT STDMETHODCALLTYPE D3D11Device::CreatePipelineLibrary(
     const void* pLibraryBlob, SIZE_T BlobLengthInBytes, REFIID riid,
     void** ppPipelineLibrary) {
-    TRACE("D3D11Device::CreatePipelineLibrary called on object %p\n", this);
-    TRACE("  Blob: %p, length: %zu, riid: %s, ppPipelineLibrary: %p\n",
+    TRACE("D3D11Device::CreatePipelineLibrary called on object %p", this);
+    TRACE("  Blob: %p, length: %zu, riid: %s, ppPipelineLibrary: %p",
           pLibraryBlob, BlobLengthInBytes, debugstr_guid(&riid).c_str(),
           ppPipelineLibrary);
     return E_NOTIMPL;
@@ -1014,8 +1014,8 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreatePipelineLibrary(
 HRESULT STDMETHODCALLTYPE D3D11Device::SetResidencyPriority(
     UINT NumObjects, ID3D12Pageable* const* ppObjects,
     const D3D12_RESIDENCY_PRIORITY* pPriorities) {
-    TRACE("D3D11Device::SetResidencyPriority called on object %p\n", this);
-    TRACE("  NumObjects: %u, ppObjects: %p, pPriorities: %p\n", NumObjects,
+    TRACE("D3D11Device::SetResidencyPriority called on object %p", this);
+    TRACE("  NumObjects: %u, ppObjects: %p, pPriorities: %p", NumObjects,
           ppObjects, pPriorities);
     return E_NOTIMPL;
 }
@@ -1023,20 +1023,20 @@ HRESULT STDMETHODCALLTYPE D3D11Device::SetResidencyPriority(
 // ID3D12DebugDevice methods
 HRESULT STDMETHODCALLTYPE
 D3D11Device::SetFeatureMask(D3D12_DEBUG_FEATURE Mask) {
-    TRACE("D3D11Device::SetFeatureMask called on object %p\n", this);
-    TRACE("  Mask: %d\n", Mask);
+    TRACE("D3D11Device::SetFeatureMask called on object %p", this);
+    TRACE("  Mask: %d", Mask);
     return E_NOTIMPL;
 }
 
 D3D12_DEBUG_FEATURE STDMETHODCALLTYPE D3D11Device::GetFeatureMask() {
-    TRACE("D3D11Device::GetFeatureMask called on object %p\n", this);
+    TRACE("D3D11Device::GetFeatureMask called on object %p", this);
     return D3D12_DEBUG_FEATURE_NONE;
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Device::ReportLiveDeviceObjects(D3D12_RLDO_FLAGS Flags) {
-    TRACE("D3D11Device::ReportLiveDeviceObjects called on object %p\n", this);
-    TRACE("  Flags: %d\n", Flags);
+    TRACE("D3D11Device::ReportLiveDeviceObjects called on object %p", this);
+    TRACE("  Flags: %d", Flags);
     return S_OK;  // Pretend we reported
 }
 
@@ -1044,56 +1044,56 @@ D3D11Device::ReportLiveDeviceObjects(D3D12_RLDO_FLAGS Flags) {
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateBuffer(
     const D3D11_BUFFER_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData,
     ID3D11Buffer** ppBuffer) {
-        TRACE("D3D11Device::CreateBuffer called on object %p\n", this);
+        TRACE("D3D11Device::CreateBuffer called on object %p", this);
     return m_d3d11Device->CreateBuffer(pDesc, pInitialData, ppBuffer);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateTexture1D(
     const D3D11_TEXTURE1D_DESC* pDesc,
     const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture1D** ppTexture1D) {
-        TRACE("D3D11Device::CreateTexture1D called on object %p\n", this);
+        TRACE("D3D11Device::CreateTexture1D called on object %p", this);
     return m_d3d11Device->CreateTexture1D(pDesc, pInitialData, ppTexture1D);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateTexture2D(
     const D3D11_TEXTURE2D_DESC* pDesc,
     const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D) {
-        TRACE("D3D11Device::CreateTexture2D called on object %p\n", this);
+        TRACE("D3D11Device::CreateTexture2D called on object %p", this);
     return m_d3d11Device->CreateTexture2D(pDesc, pInitialData, ppTexture2D);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateTexture3D(
     const D3D11_TEXTURE3D_DESC* pDesc,
     const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture3D** ppTexture3D) {
-        TRACE("D3D11Device::CreateTexture3D called on object %p\n", this);
+        TRACE("D3D11Device::CreateTexture3D called on object %p", this);
     return m_d3d11Device->CreateTexture3D(pDesc, pInitialData, ppTexture3D);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateShaderResourceView(
     ID3D11Resource* pResource, const D3D11_SHADER_RESOURCE_VIEW_DESC* pDesc,
     ID3D11ShaderResourceView** ppSRView) {
-        TRACE("D3D11Device::CreateShaderResourceView called on object %p\n", this);
+        TRACE("D3D11Device::CreateShaderResourceView called on object %p", this);
     return m_d3d11Device->CreateShaderResourceView(pResource, pDesc, ppSRView);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateUnorderedAccessView(
     ID3D11Resource* pResource, const D3D11_UNORDERED_ACCESS_VIEW_DESC* pDesc,
     ID3D11UnorderedAccessView** ppUAView) {
-        TRACE("D3D11Device::CreateUnorderedAccessView called on object %p\n", this);
+        TRACE("D3D11Device::CreateUnorderedAccessView called on object %p", this);
     return m_d3d11Device->CreateUnorderedAccessView(pResource, pDesc, ppUAView);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateRenderTargetView(
     ID3D11Resource* pResource, const D3D11_RENDER_TARGET_VIEW_DESC* pDesc,
     ID3D11RenderTargetView** ppRTView) {
-        TRACE("D3D11Device::CreateRenderTargetView called on object %p\n", this);
+        TRACE("D3D11Device::CreateRenderTargetView called on object %p", this);
     return m_d3d11Device->CreateRenderTargetView(pResource, pDesc, ppRTView);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDepthStencilView(
     ID3D11Resource* pResource, const D3D11_DEPTH_STENCIL_VIEW_DESC* pDesc,
     ID3D11DepthStencilView** ppDepthStencilView) {
-        TRACE("D3D11Device::CreateDepthStencilView called on object %p\n", this);
+        TRACE("D3D11Device::CreateDepthStencilView called on object %p", this);
     return m_d3d11Device->CreateDepthStencilView(pResource, pDesc,
                                                  ppDepthStencilView);
 }
@@ -1101,7 +1101,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateInputLayout(
     const D3D11_INPUT_ELEMENT_DESC* pInputElementDescs, UINT NumElements,
     const void* pShaderBytecodeWithInputSignature, SIZE_T BytecodeLength,
     ID3D11InputLayout** ppInputLayout) {
-        TRACE("D3D11Device::CreateInputLayout called on object %p\n", this);
+        TRACE("D3D11Device::CreateInputLayout called on object %p", this);
     return m_d3d11Device->CreateInputLayout(pInputElementDescs, NumElements,
                                             pShaderBytecodeWithInputSignature,
                                             BytecodeLength, ppInputLayout);
@@ -1110,7 +1110,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateInputLayout(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateVertexShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11VertexShader** ppVertexShader) {
-        TRACE("D3D11Device::CreateVertexShader called on object %p\n", this);
+        TRACE("D3D11Device::CreateVertexShader called on object %p", this);
     return m_d3d11Device->CreateVertexShader(pShaderBytecode, BytecodeLength,
                                              pClassLinkage, ppVertexShader);
 }
@@ -1119,7 +1119,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateGeometryShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage,
     ID3D11GeometryShader** ppGeometryShader) {
-        TRACE("D3D11Device::CreateGeometryShader called on object %p\n", this);
+        TRACE("D3D11Device::CreateGeometryShader called on object %p", this);
     return m_d3d11Device->CreateGeometryShader(pShaderBytecode, BytecodeLength,
                                                pClassLinkage, ppGeometryShader);
 }
@@ -1130,7 +1130,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateGeometryShaderWithStreamOutput(
     const UINT* pBufferStrides, UINT NumStrides, UINT RasterizedStream,
     ID3D11ClassLinkage* pClassLinkage,
     ID3D11GeometryShader** ppGeometryShader) {
-        TRACE("D3D11Device::CreateGeometryShaderWithStreamOutput called on object %p\n", this);
+        TRACE("D3D11Device::CreateGeometryShaderWithStreamOutput called on object %p", this);
     return m_d3d11Device->CreateGeometryShaderWithStreamOutput(
         pShaderBytecode, BytecodeLength, pSODeclaration, NumEntries,
         pBufferStrides, NumStrides, RasterizedStream, pClassLinkage,
@@ -1140,14 +1140,14 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateGeometryShaderWithStreamOutput(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreatePixelShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11PixelShader** ppPixelShader) {
-        TRACE("D3D11Device::CreatePixelShader called on object %p\n", this);
+        TRACE("D3D11Device::CreatePixelShader called on object %p", this);
     return m_d3d11Device->CreatePixelShader(pShaderBytecode, BytecodeLength,
                                             pClassLinkage, ppPixelShader);
 }
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateHullShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11HullShader** ppHullShader) {
-        TRACE("D3D11Device::CreateHullShader called on object %p\n", this);
+        TRACE("D3D11Device::CreateHullShader called on object %p", this);
     return m_d3d11Device->CreateHullShader(pShaderBytecode, BytecodeLength,
                                            pClassLinkage, ppHullShader);
 }
@@ -1155,7 +1155,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateHullShader(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDomainShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11DomainShader** ppDomainShader) {
-        TRACE("D3D11Device::CreateDomainShader called on object %p\n", this);
+        TRACE("D3D11Device::CreateDomainShader called on object %p", this);
     return m_d3d11Device->CreateDomainShader(pShaderBytecode, BytecodeLength,
                                              pClassLinkage, ppDomainShader);
 }
@@ -1163,26 +1163,26 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDomainShader(
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateComputeShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11ComputeShader** ppComputeShader) {
-        TRACE("D3D11Device::CreateComputeShader called on object %p\n", this);
+        TRACE("D3D11Device::CreateComputeShader called on object %p", this);
     return m_d3d11Device->CreateComputeShader(pShaderBytecode, BytecodeLength,
                                               pClassLinkage, ppComputeShader);
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CreateClassLinkage(ID3D11ClassLinkage** ppLinkage) {
-        TRACE("D3D11Device::CreateClassLinkage called on object %p\n", this);
+        TRACE("D3D11Device::CreateClassLinkage called on object %p", this);
     return m_d3d11Device->CreateClassLinkage(ppLinkage);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateBlendState(
     const D3D11_BLEND_DESC* pBlendStateDesc, ID3D11BlendState** ppBlendState) {
-        TRACE("D3D11Device::CreateBlendState called on object %p\n", this);
+        TRACE("D3D11Device::CreateBlendState called on object %p", this);
     return m_d3d11Device->CreateBlendState(pBlendStateDesc, ppBlendState);
 }
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDepthStencilState(
     const D3D11_DEPTH_STENCIL_DESC* pDepthStencilDesc,
     ID3D11DepthStencilState** ppDepthStencilState) {
-        TRACE("D3D11Device::CreateDepthStencilState called on object %p\n", this);
+        TRACE("D3D11Device::CreateDepthStencilState called on object %p", this);
     return m_d3d11Device->CreateDepthStencilState(pDepthStencilDesc,
                                                   ppDepthStencilState);
 }
@@ -1190,7 +1190,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDepthStencilState(
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CreateRasterizerState(const D3D11_RASTERIZER_DESC* pRasterizerDesc,
                                    ID3D11RasterizerState** ppRasterizerState) {
-    TRACE("D3D11Device::CreateRasterizerState called on object %p\n", this);
+    TRACE("D3D11Device::CreateRasterizerState called on object %p", this);
     return m_d3d11Device->CreateRasterizerState(pRasterizerDesc,
                                                 ppRasterizerState);
 }
@@ -1198,24 +1198,24 @@ D3D11Device::CreateRasterizerState(const D3D11_RASTERIZER_DESC* pRasterizerDesc,
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CreateSamplerState(const D3D11_SAMPLER_DESC* pSamplerDesc,
                                 ID3D11SamplerState** ppSamplerState) {
-    TRACE("D3D11Device::CreateSamplerState called on object %p\n", this);
+    TRACE("D3D11Device::CreateSamplerState called on object %p", this);
     return m_d3d11Device->CreateSamplerState(pSamplerDesc, ppSamplerState);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateQuery(
     const D3D11_QUERY_DESC* pQueryDesc, ID3D11Query** ppQuery) {
-    TRACE("D3D11Device::CreateQuery called on object %p\n", this);
+    TRACE("D3D11Device::CreateQuery called on object %p", this);
     return m_d3d11Device->CreateQuery(pQueryDesc, ppQuery);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreatePredicate(
     const D3D11_QUERY_DESC* pPredicateDesc, ID3D11Predicate** ppPredicate) {
-    TRACE("D3D11Device::CreatePredicate called on object %p\n", this);
+    TRACE("D3D11Device::CreatePredicate called on object %p", this);
     return m_d3d11Device->CreatePredicate(pPredicateDesc, ppPredicate);
 }
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateCounter(
     const D3D11_COUNTER_DESC* pCounterDesc, ID3D11Counter** ppCounter) {
-    TRACE("D3D11Device::CreateCounter called on object %p\n", this);
+    TRACE("D3D11Device::CreateCounter called on object %p", this);
     return m_d3d11Device->CreateCounter(pCounterDesc, ppCounter);
 }
 
@@ -1227,43 +1227,43 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeferredContext(
 
 HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedResource(
     HANDLE hResource, REFIID ReturnedInterface, void** ppResource) {
-    TRACE("D3D11Device::OpenSharedResource called on object %p\n", this);
+    TRACE("D3D11Device::OpenSharedResource called on object %p", this);
     return m_d3d11Device->OpenSharedResource(hResource, ReturnedInterface,
                                              ppResource);
 }
 
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CheckFormatSupport(DXGI_FORMAT Format, UINT* pFormatSupport) {
-    TRACE("D3D11Device::CheckFormatSupport called on object %p\n", this);
+    TRACE("D3D11Device::CheckFormatSupport called on object %p", this);
     return m_d3d11Device->CheckFormatSupport(Format, pFormatSupport);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CheckMultisampleQualityLevels(
     DXGI_FORMAT Format, UINT SampleCount, UINT* pNumQualityLevels) {
-    TRACE("D3D11Device::CheckMultisampleQualityLevels called on object %p\n", this);
+    TRACE("D3D11Device::CheckMultisampleQualityLevels called on object %p", this);
     return m_d3d11Device->CheckMultisampleQualityLevels(Format, SampleCount,
                                                         pNumQualityLevels);
 }
 void STDMETHODCALLTYPE
 D3D11Device::GetImmediateContext(ID3D11DeviceContext** ppImmediateContext) {
-    TRACE("D3D11Device::GetImmediateContext called on object %p\n", this);
+    TRACE("D3D11Device::GetImmediateContext called on object %p", this);
     m_d3d11Device->GetImmediateContext(ppImmediateContext);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Device::SetExceptionMode(UINT RaiseFlags) {
-    TRACE("D3D11Device::SetExceptionMode called on object %p\n", this);
+    TRACE("D3D11Device::SetExceptionMode called on object %p", this);
     return m_d3d11Device->SetExceptionMode(RaiseFlags);
 }
 
 UINT STDMETHODCALLTYPE D3D11Device::GetExceptionMode() {
-    TRACE("D3D11Device::GetExceptionMode called on object %p\n", this);
+    TRACE("D3D11Device::GetExceptionMode called on object %p", this);
     return m_d3d11Device->GetExceptionMode();
 }
 
 // ID3D11Device1 methods
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeferredContext1(
     UINT ContextFlags, ID3D11DeviceContext1** ppDeferredContext) {
-    TRACE("D3D11Device::CreateDeferredContext1 called on object %p\n", this);
+    TRACE("D3D11Device::CreateDeferredContext1 called on object %p", this);
     return m_d3d11Device1 ? m_d3d11Device1->CreateDeferredContext1(
                                 ContextFlags, ppDeferredContext)
                           : E_NOTIMPL;
@@ -1272,7 +1272,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeferredContext1(
 HRESULT STDMETHODCALLTYPE
 D3D11Device::CreateBlendState1(const D3D11_BLEND_DESC1* pBlendStateDesc,
                                ID3D11BlendState1** ppBlendState) {
-    TRACE("D3D11Device::CreateBlendState1 called on object %p\n", this);
+    TRACE("D3D11Device::CreateBlendState1 called on object %p", this);
     return m_d3d11Device1 ? m_d3d11Device1->CreateBlendState1(pBlendStateDesc,
                                                               ppBlendState)
                           : E_NOTIMPL;
@@ -1281,7 +1281,7 @@ D3D11Device::CreateBlendState1(const D3D11_BLEND_DESC1* pBlendStateDesc,
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateRasterizerState1(
     const D3D11_RASTERIZER_DESC1* pRasterizerDesc,
     ID3D11RasterizerState1** ppRasterizerState) {
-    TRACE("D3D11Device::CreateRasterizerState1 called on object %p\n", this);
+    TRACE("D3D11Device::CreateRasterizerState1 called on object %p", this);
     return m_d3d11Device1 ? m_d3d11Device1->CreateRasterizerState1(
                                 pRasterizerDesc, ppRasterizerState)
                           : E_NOTIMPL;
@@ -1292,7 +1292,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeviceContextState(
     UINT SDKVersion, REFIID EmulatedInterface,
     D3D_FEATURE_LEVEL* pChosenFeatureLevel,
     ID3DDeviceContextState** ppContextState) {
-    TRACE("D3D11Device::CreateDeviceContextState called on object %p\n", this);
+    TRACE("D3D11Device::CreateDeviceContextState called on object %p", this);
     return m_d3d11Device1
                ? m_d3d11Device1->CreateDeviceContextState(
                      Flags, pFeatureLevels, FeatureLevels, SDKVersion,
@@ -1302,7 +1302,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeviceContextState(
 
 HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedResource1(
     HANDLE hResource, REFIID returnedInterface, void** ppResource) {
-    TRACE("D3D11Device::OpenSharedResource1 called on object %p\n", this);
+    TRACE("D3D11Device::OpenSharedResource1 called on object %p", this);
     return m_d3d11Device1 ? m_d3d11Device1->OpenSharedResource1(
                                 hResource, returnedInterface, ppResource)
                           : E_NOTIMPL;
@@ -1311,11 +1311,11 @@ HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedResource1(
 HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedResourceByName(
     LPCWSTR lpName, DWORD dwDesiredAccess, REFIID returnedInterface,
     void** ppResource) {
-    TRACE("D3D11Device::OpenSharedResourceByName called on object %p\n", this);
-    TRACE("  lpName: %ls\n", lpName);
-    TRACE("  dwDesiredAccess: %lu\n", dwDesiredAccess);
-    TRACE("  returnedInterface: %p\n", returnedInterface);
-    TRACE("  ppResource: %p\n", ppResource);
+    TRACE("D3D11Device::OpenSharedResourceByName called on object %p", this);
+    TRACE("  lpName: %ls", lpName);
+    TRACE("  dwDesiredAccess: %lu", dwDesiredAccess);
+    TRACE("  returnedInterface: %p", returnedInterface);
+    TRACE("  ppResource: %p", ppResource);
     return m_d3d11Device1
                ? m_d3d11Device1->OpenSharedResourceByName(
                      lpName, dwDesiredAccess, returnedInterface, ppResource)
@@ -1324,7 +1324,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::OpenSharedResourceByName(
 // ID3D11Device1 methods
 void STDMETHODCALLTYPE
 D3D11Device::GetImmediateContext1(ID3D11DeviceContext1** ppImmediateContext) {
-    TRACE("D3D11Device::GetImmediateContext1 called on object %p\n", this);
+    TRACE("D3D11Device::GetImmediateContext1 called on object %p", this);
     if (m_d3d11Device1) {
         m_d3d11Device1->GetImmediateContext1(ppImmediateContext);
     } else {
@@ -1335,7 +1335,7 @@ D3D11Device::GetImmediateContext1(ID3D11DeviceContext1** ppImmediateContext) {
 // ID3D11Device2 methods
 void STDMETHODCALLTYPE
 D3D11Device::GetImmediateContext2(ID3D11DeviceContext2** ppImmediateContext) {
-    TRACE("D3D11Device::GetImmediateContext2 called on object %p\n", this);
+    TRACE("D3D11Device::GetImmediateContext2 called on object %p", this);
     if (m_d3d11Device2) {
         m_d3d11Device2->GetImmediateContext2(ppImmediateContext);
     } else {
@@ -1345,7 +1345,7 @@ D3D11Device::GetImmediateContext2(ID3D11DeviceContext2** ppImmediateContext) {
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CreateDeferredContext2(
     UINT ContextFlags, ID3D11DeviceContext2** ppDeferredContext) {
-    TRACE("D3D11Device::CreateDeferredContext2 called on object %p\n", this);
+    TRACE("D3D11Device::CreateDeferredContext2 called on object %p", this);
     return m_d3d11Device2 ? m_d3d11Device2->CreateDeferredContext2(
                                 ContextFlags, ppDeferredContext)
                           : E_NOTIMPL;
@@ -1357,7 +1357,7 @@ void STDMETHODCALLTYPE D3D11Device::GetResourceTiling(
     D3D11_TILE_SHAPE* pStandardTileShapeForNonPackedMips,
     UINT* pNumSubresourceTilings, UINT FirstSubresourceTilingToGet,
     D3D11_SUBRESOURCE_TILING* pSubresourceTilingsForNonPackedMips) {
-    TRACE("D3D11Device::GetResourceTiling called on object %p\n", this);
+    TRACE("D3D11Device::GetResourceTiling called on object %p", this);
     if (m_d3d11Device2) {
         m_d3d11Device2->GetResourceTiling(
             pTiledResource, pNumTilesForEntireResource, pPackedMipDesc,
@@ -1368,7 +1368,7 @@ void STDMETHODCALLTYPE D3D11Device::GetResourceTiling(
 
 HRESULT STDMETHODCALLTYPE D3D11Device::CheckMultisampleQualityLevels1(
     DXGI_FORMAT Format, UINT SampleCount, UINT Flags, UINT* pNumQualityLevels) {
-    TRACE("D3D11Device::CheckMultisampleQualityLevels1 called on object %p\n",
+    TRACE("D3D11Device::CheckMultisampleQualityLevels1 called on object %p",
           this);
     return m_d3d11Device2 ? m_d3d11Device2->CheckMultisampleQualityLevels1(
                                 Format, SampleCount, Flags, pNumQualityLevels)
@@ -1377,7 +1377,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CheckMultisampleQualityLevels1(
 
 void STDMETHODCALLTYPE
 D3D11Device::CheckCounterInfo(D3D11_COUNTER_INFO* pCounterInfo) {
-    TRACE("D3D11Device::CheckCounterInfo called on object %p\n", this);
+    TRACE("D3D11Device::CheckCounterInfo called on object %p", this);
     if (m_d3d11Device) m_d3d11Device->CheckCounterInfo(pCounterInfo);
 }
 
@@ -1385,7 +1385,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CheckCounter(
     const D3D11_COUNTER_DESC* pDesc, D3D11_COUNTER_TYPE* pType,
     UINT* pActiveCounters, LPSTR szName, UINT* pNameLength, LPSTR szUnits,
     UINT* pUnitsLength, LPSTR szDescription, UINT* pDescriptionLength) {
-    TRACE("D3D11Device::CheckCounter called on object %p\n", this);
+    TRACE("D3D11Device::CheckCounter called on object %p", this);
     return m_d3d11Device
                ? m_d3d11Device->CheckCounter(
                      pDesc, pType, pActiveCounters, szName, pNameLength,
@@ -1396,7 +1396,7 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CheckCounter(
 HRESULT STDMETHODCALLTYPE D3D11Device::CheckFeatureSupport(
     D3D11_FEATURE Feature, void* pFeatureSupportData,
     UINT FeatureSupportDataSize) {
-    TRACE("D3D11Device::CheckFeatureSupport called on object %p\n", this);
+    TRACE("D3D11Device::CheckFeatureSupport called on object %p", this);
     return m_d3d11Device
                ? m_d3d11Device->CheckFeatureSupport(
                      Feature, pFeatureSupportData, FeatureSupportDataSize)
@@ -1404,18 +1404,18 @@ HRESULT STDMETHODCALLTYPE D3D11Device::CheckFeatureSupport(
 }
 
 D3D_FEATURE_LEVEL STDMETHODCALLTYPE D3D11Device::GetFeatureLevel() {
-    TRACE("D3D11Device::GetFeatureLevel called on object %p\n", this);
+    TRACE("D3D11Device::GetFeatureLevel called on object %p", this);
     return m_d3d11Device ? m_d3d11Device->GetFeatureLevel()
                          : D3D_FEATURE_LEVEL_11_0;
 }
 
 UINT STDMETHODCALLTYPE D3D11Device::GetCreationFlags() {
-    TRACE("D3D11Device::GetCreationFlags called on object %p\n", this);
+    TRACE("D3D11Device::GetCreationFlags called on object %p", this);
     return m_d3d11Device ? m_d3d11Device->GetCreationFlags() : 0;
 }
 
 ID3D11Resource* D3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
-    TRACE("D3D11Device::GetD3D11Resource called on object %p\n", this);
+    TRACE("D3D11Device::GetD3D11Resource called on object %p", this);
     if (!d3d12Resource) {
         return nullptr;
     }
@@ -1429,7 +1429,7 @@ ID3D11Resource* D3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
         return d3d11Resource;
     }
 
-    ERR("D3D11 resource not found for D3D12 resource %p\n", d3d12Resource);
+    ERR("D3D11 resource not found for D3D12 resource %p", d3d12Resource);
     return nullptr;
 }
 

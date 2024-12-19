@@ -14,7 +14,7 @@ std::mutex D3D11PipelineState::s_cacheMutex;
 HRESULT D3D11PipelineState::CreateGraphics(
     D3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
-    TRACE("%p, %p, %s, %p\n", device, pDesc, debugstr_guid(&riid).c_str(),
+    TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
 
     if (!device || !pDesc || !ppPipelineState) {
@@ -48,7 +48,7 @@ HRESULT D3D11PipelineState::CreateGraphics(
 HRESULT D3D11PipelineState::CreateCompute(
     D3D11Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
-    TRACE("%p, %p, %s, %p\n", device, pDesc, debugstr_guid(&riid).c_str(),
+    TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
 
     if (!device || !pDesc || !ppPipelineState) {
@@ -156,12 +156,12 @@ D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
 }
 
 D3D11PipelineState::D3D11PipelineState(D3D11Device* device) : m_device(device) {
-    TRACE("%p\n", device);
+    TRACE("%p", device);
 }
 
 HRESULT D3D11PipelineState::InitializeGraphics(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
-    TRACE("Initializing graphics pipeline state\n");
+    TRACE("Initializing graphics pipeline state");
 
     // Create vertex shader
     if (pDesc->VS.pShaderBytecode && pDesc->VS.BytecodeLength) {
@@ -169,7 +169,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength, nullptr,
             &m_vertexShader);
         if (FAILED(hr)) {
-            ERR("Failed to create vertex shader, hr %#x.\n", hr);
+            ERR("Failed to create vertex shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -187,7 +187,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
                                           pDesc->VS.BytecodeLength);
         }
         if (FAILED(hr)) {
-            ERR("Failed to create stream output shader, hr %#x.\n", hr);
+            ERR("Failed to create stream output shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -198,7 +198,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength, nullptr,
             &m_pixelShader);
         if (FAILED(hr)) {
-            ERR("Failed to create pixel shader, hr %#x.\n", hr);
+            ERR("Failed to create pixel shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -209,7 +209,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->GS.pShaderBytecode, pDesc->GS.BytecodeLength, nullptr,
             &m_geometryShader);
         if (FAILED(hr)) {
-            ERR("Failed to create geometry shader, hr %#x.\n", hr);
+            ERR("Failed to create geometry shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -220,7 +220,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->HS.pShaderBytecode, pDesc->HS.BytecodeLength, nullptr,
             &m_hullShader);
         if (FAILED(hr)) {
-            ERR("Failed to create hull shader, hr %#x.\n", hr);
+            ERR("Failed to create hull shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -231,7 +231,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->DS.pShaderBytecode, pDesc->DS.BytecodeLength, nullptr,
             &m_domainShader);
         if (FAILED(hr)) {
-            ERR("Failed to create domain shader, hr %#x.\n", hr);
+            ERR("Failed to create domain shader, hr %#x.", hr);
             return hr;
         }
     }
@@ -259,7 +259,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
             pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength,
             &m_inputLayout);
         if (FAILED(hr)) {
-            ERR("Failed to create input layout, hr %#x.\n", hr);
+            ERR("Failed to create input layout, hr %#x.", hr);
             return hr;
         }
     }
@@ -287,7 +287,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
     HRESULT hr =
         m_device->GetD3D11Device()->CreateBlendState(&blendDesc, &m_blendState);
     if (FAILED(hr)) {
-        ERR("Failed to create blend state, hr %#x.\n", hr);
+        ERR("Failed to create blend state, hr %#x.", hr);
         return hr;
     }
 
@@ -312,7 +312,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
     hr = m_device->GetD3D11Device()->CreateRasterizerState(&rasterizerDesc,
                                                            &m_rasterizerState);
     if (FAILED(hr)) {
-        ERR("Failed to create rasterizer state, hr %#x.\n", hr);
+        ERR("Failed to create rasterizer state, hr %#x.", hr);
         return hr;
     }
 
@@ -351,7 +351,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
     hr = m_device->GetD3D11Device()->CreateDepthStencilState(
         &depthStencilDesc, &m_depthStencilState);
     if (FAILED(hr)) {
-        ERR("Failed to create depth-stencil state, hr %#x.\n", hr);
+        ERR("Failed to create depth-stencil state, hr %#x.", hr);
         return hr;
     }
 
@@ -397,10 +397,10 @@ HRESULT D3D11PipelineState::CreateStreamOutputShader(
 
 HRESULT D3D11PipelineState::InitializeCompute(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc) {
-    TRACE("Initializing compute pipeline state\n");
+    TRACE("Initializing compute pipeline state");
 
     if (!pDesc->CS.pShaderBytecode || !pDesc->CS.BytecodeLength) {
-        ERR("No compute shader provided.\n");
+        ERR("No compute shader provided.");
         return E_INVALIDARG;
     }
 
@@ -408,7 +408,7 @@ HRESULT D3D11PipelineState::InitializeCompute(
         pDesc->CS.pShaderBytecode, pDesc->CS.BytecodeLength, nullptr,
         &m_computeShader);
     if (FAILED(hr)) {
-        ERR("Failed to create compute shader, hr %#x.\n", hr);
+        ERR("Failed to create compute shader, hr %#x.", hr);
         return hr;
     }
 
@@ -418,7 +418,7 @@ HRESULT D3D11PipelineState::InitializeCompute(
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::QueryInterface(REFIID riid,
                                                              void** ppvObject) {
-    TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvObject);
+    TRACE("D3D11PipelineState::QueryInterface %s, %p", debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
         return E_POINTER;
@@ -430,19 +430,19 @@ HRESULT STDMETHODCALLTYPE D3D11PipelineState::QueryInterface(REFIID riid,
         return S_OK;
     }
 
-    WARN("Unknown interface %s.\n", debugstr_guid(&riid).c_str());
+    WARN("Unknown interface %s.", debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE D3D11PipelineState::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
-    TRACE("%p increasing refcount to %u.\n", this, ref);
+    TRACE("%p increasing refcount to %u.", this, ref);
     return ref;
 }
 
 ULONG STDMETHODCALLTYPE D3D11PipelineState::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
-    TRACE("%p decreasing refcount to %u.\n", this, ref);
+    TRACE("%p decreasing refcount to %u.", this, ref);
     if (ref == 0) {
         delete this;
     }
@@ -453,43 +453,43 @@ ULONG STDMETHODCALLTYPE D3D11PipelineState::Release() {
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetPrivateData(REFGUID guid,
                                                              UINT* pDataSize,
                                                              void* pData) {
-    TRACE("%s, %p, %p\n", debugstr_guid(&guid).c_str(), pDataSize, pData);
+    TRACE("D3D11PipelineState::GetPrivateData %s, %p, %p", debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_device->GetPrivateData(guid, pDataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateData(
     REFGUID guid, UINT DataSize, const void* pData) {
-    TRACE("%s, %u, %p\n", debugstr_guid(&guid).c_str(), DataSize, pData);
+    TRACE("D3D11PipelineState::SetPrivateData %s, %u, %p", debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_device->SetPrivateData(guid, DataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateDataInterface(
     REFGUID guid, const IUnknown* pData) {
-    TRACE("%s, %p\n", debugstr_guid(&guid).c_str(), pData);
+    TRACE("D3D11PipelineState::SetPrivateDataInterface %s, %p", debugstr_guid(&guid).c_str(), pData);
     return m_device->SetPrivateDataInterface(guid, pData);
 }
 
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetName(LPCWSTR Name) {
-    TRACE("%s\n", debugstr_w(Name).c_str());
+    TRACE("D3D11PipelineState::SetName %s", debugstr_w(Name).c_str());
     return m_device->SetName(Name);
 }
 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetDevice(REFIID riid,
                                                         void** ppvDevice) {
-    TRACE("%s, %p\n", debugstr_guid(&riid).c_str(), ppvDevice);
+    TRACE("D3D11PipelineState::GetDevice %s, %p", debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12PipelineState methods
 HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetCachedBlob(ID3DBlob** ppBlob) {
-    TRACE("%p\n", ppBlob);
-    // We don't implement pipeline state caching yet
+    TRACE("D3D11PipelineState::GetCachedBlob %p", ppBlob);
+    FIXME("We don't implement pipeline state caching yet");
     return E_NOTIMPL;
 }
 
 void D3D11PipelineState::Apply(ID3D11DeviceContext* context) {
-    TRACE("%p\n", context);
+    TRACE("D3D11PipelineState::Apply");
 
     if (m_vertexShader) {
         context->VSSetShader(m_vertexShader.Get(), nullptr, 0);

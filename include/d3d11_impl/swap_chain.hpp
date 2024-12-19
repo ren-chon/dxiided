@@ -162,7 +162,7 @@ public:
 
     HRESULT STDMETHODCALLTYPE SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace) override {
         TRACE("D3D11SwapChain::SetColorSpace1 called");
-        TRACE("  ColorSpace: %d\n", ColorSpace);
+        TRACE("  ColorSpace: %d", ColorSpace);
         return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
             swapchain3->SetColorSpace1(ColorSpace) : E_NOINTERFACE;
     }
@@ -186,8 +186,8 @@ public:
     // IDXGISwapChain4 methods
     HRESULT STDMETHODCALLTYPE SetHDRMetaData(DXGI_HDR_METADATA_TYPE Type, UINT Size, void* pMetaData) override {
         TRACE("D3D11SwapChain::SetHDRMetaData called");
-        TRACE("  Type: %d\n", Type);
-        TRACE("  Size: %d\n", Size);
+        TRACE("  Type: %d", Type);
+        TRACE("  Size: %d", Size);
         return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain4) == S_OK ?
             swapchain4->SetHDRMetaData(Type, Size, pMetaData) : E_NOINTERFACE;
     }
