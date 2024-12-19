@@ -115,15 +115,17 @@ class D3D11Resource final : public ID3D12Resource {
 
     D3D11Device* m_device;
     Microsoft::WRL::ComPtr<ID3D11Resource> m_resource;
-    D3D12_RESOURCE_DESC m_desc;
+    std::vector<ChunkInfo> m_chunks;
     D3D12_HEAP_PROPERTIES m_heapProperties;
+    D3D12_RESOURCE_DESC m_desc;
+    D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
     D3D12_HEAP_FLAGS m_heapFlags;
     D3D12_GPU_VIRTUAL_ADDRESS m_gpuAddress{0};
     LONG m_refCount{1};
-    D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
-    D3D12_RESOURCE_STATES m_state;  // Add state member
     bool m_isUAV{false};
-    std::vector<ChunkInfo> m_chunks;  // For split buffers
+
+    // Helper functions
+    HRESULT GetBufferDesc(D3D11_BUFFER_DESC* desc) const;
 
     // Helper functions for large buffer creation
     HRESULT CreateBufferDefault(const D3D11_BUFFER_DESC& desc);
