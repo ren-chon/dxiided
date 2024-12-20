@@ -86,11 +86,12 @@ class D3D11Resource final : public ID3D12Resource {
 
     // Helper methods
     ID3D11Resource* GetD3D11Resource() const { return m_resource.Get(); }
-    static UINT GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc);
-    void StoreInDeviceMap();
+    static UINT GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc, bool isUAV);
     static D3D11_BIND_FLAG GetD3D11BindFlags(
         const D3D12_RESOURCE_DESC* pDesc,
-        const D3D12_HEAP_PROPERTIES* pHeapProperties);
+        const D3D12_HEAP_PROPERTIES* pHeapProperties,
+        bool& isUAV);
+    void StoreInDeviceMap();
 
    private:
     struct ChunkInfo {
@@ -117,13 +118,13 @@ class D3D11Resource final : public ID3D12Resource {
     D3D11Device* m_device;
     Microsoft::WRL::ComPtr<ID3D11Resource> m_resource;
     std::vector<ChunkInfo> m_chunks;
-    D3D12_HEAP_PROPERTIES m_heapProperties;
+    LONG m_refCount{1};
     D3D12_RESOURCE_DESC m_desc;
+    D3D12_HEAP_PROPERTIES m_heapProperties;
+    D3D12_HEAP_FLAGS m_heapFlags;
     D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_stagingBuffer;
-    D3D12_HEAP_FLAGS m_heapFlags;
     D3D12_GPU_VIRTUAL_ADDRESS m_gpuAddress{0};
-    LONG m_refCount{1};
     bool m_isUAV{false};
 
     // Helper functions
