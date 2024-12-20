@@ -58,10 +58,10 @@ HRESULT D3D11Resource::Create(D3D11Device* device, ID3D11Resource* resource,
 }
 
 D3D11Resource::D3D11Resource(D3D11Device* device,
-                           const D3D12_HEAP_PROPERTIES* pHeapProperties,
-                           D3D12_HEAP_FLAGS HeapFlags,
-                           const D3D12_RESOURCE_DESC* pDesc,
-                           D3D12_RESOURCE_STATES InitialState)
+                             const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                             D3D12_HEAP_FLAGS HeapFlags,
+                             const D3D12_RESOURCE_DESC* pDesc,
+                             D3D12_RESOURCE_STATES InitialState)
     : m_device(device),
       m_heapProperties(*pHeapProperties),
       m_heapFlags(HeapFlags),
@@ -69,20 +69,21 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
       m_currentState(InitialState),
       m_isUAV(false),
       m_refCount(1) {
-        TRACE("Creating D3D11Resource with heap type %s", 
+    TRACE("Creating D3D11Resource with heap type %s",
           GetD3D12HeapTypeName(pHeapProperties->Type));
-    TRACE("Creating resource format=%d, width=%llu, height=%u",
-         pDesc->Format, pDesc->Width, pDesc->Height);
+    TRACE("Creating resource format=%d, width=%llu, height=%u", pDesc->Format,
+          pDesc->Width, pDesc->Height);
 
     // Validate buffer size for UPLOAD heaps
-    if (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD && 
-        pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && 
+    if (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD &&
+        pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
         pDesc->Width > 256 * 1024 * 1024) {  // 256MB limit
-        WARN("Large UPLOAD buffer requested (%llu bytes), may fail to map", pDesc->Width);
+        WARN("Large UPLOAD buffer requested (%llu bytes), may fail to map",
+             pDesc->Width);
     }
 
     D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc, pHeapProperties);
-    D3D11_USAGE usage = GetD3D11Usage(pHeapProperties);
+    D3D11_USAGE usage = GetD3D11Usage(pHeapProperties, pDesc);
 
     switch (pDesc->Dimension) {
         case D3D12_RESOURCE_DIMENSION_BUFFER: {
@@ -101,43 +102,44 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
 
             // For large UPLOAD buffers, use configured strategy
             HRESULT hr = S_OK;
-            if (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD && 
+            if (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD &&
                 pDesc->Width > 64 * 1024 * 1024) {  // 64MB threshold
-                
+
                 // TODO: Get from config file later
                 // For now, use SPLIT_CHUNKS for very large buffers
-                LargeBufferStrategy strategy = 
-                    (pDesc->Width > 256 * 1024 * 1024) ? 
-                    LargeBufferStrategy::SPLIT_CHUNKS : 
-                    LargeBufferStrategy::FALLBACK;
-                
-                TRACE("Large UPLOAD buffer detected, using %s strategy", 
+                LargeBufferStrategy strategy =
+                    (pDesc->Width > 256 * 1024 * 1024)
+                        ? LargeBufferStrategy::SPLIT_CHUNKS
+                        : LargeBufferStrategy::FALLBACK;
+
+                TRACE("Large UPLOAD buffer detected, using %s strategy",
                       GetStrategyName(strategy));
-                
+
                 switch (strategy) {
                     case LargeBufferStrategy::DEFAULT:
                         hr = CreateBufferDefault(bufferDesc);
                         break;
-                        
+
                     case LargeBufferStrategy::FALLBACK:
                         hr = CreateBufferWithFallback(bufferDesc);
                         break;
-                        
+
                     case LargeBufferStrategy::SPLIT_CHUNKS:
                         hr = CreateBufferInChunks(bufferDesc);
                         break;
-                        
+
                     default:
                         ERR("Unknown buffer creation strategy");
                         return;
                 }
-                
+
                 if (FAILED(hr)) {
-                    ERR("Failed to create large buffer with %s strategy, hr %#x",
+                    ERR("Failed to create large buffer with %s strategy, hr "
+                        "%#x",
                         GetStrategyName(strategy), hr);
                     return;
                 }
-                
+
                 return;
             }
 
@@ -240,10 +242,9 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
 }
 
 D3D11Resource::D3D11Resource(D3D11Device* device, ID3D11Resource* resource,
-                           const D3D12_RESOURCE_DESC* pDesc,
-                           D3D12_RESOURCE_STATES InitialState)
+                             const D3D12_RESOURCE_DESC* pDesc,
+                             D3D12_RESOURCE_STATES InitialState)
     : m_device(device), m_desc(*pDesc), m_currentState(InitialState) {
-    
     if (resource) {
         m_resource = resource;
     }
@@ -280,37 +281,43 @@ void D3D11Resource::StoreInDeviceMap() {
 
 UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
     TRACE("GetMiscFlags called");
-    TRACE("  Alignment: %llu", pDesc->Alignment);
-    TRACE("  Dimension: %x", pDesc->Dimension);
-    TRACE("  DepthOrArraySize: %x", pDesc->DepthOrArraySize);
-    TRACE("  MipLevels: %x", pDesc->MipLevels);
+    TRACE("  Alignment: %#x", pDesc->Alignment);
+    TRACE("  Dimension: %d", pDesc->Dimension);
+    TRACE("  DepthOrArraySize: %d", pDesc->DepthOrArraySize);
+    TRACE("  MipLevels: %d", pDesc->MipLevels);
     TRACE("  Format: %x", pDesc->Format);
     TRACE("  Flags: %x", pDesc->Flags);
     TRACE("  Height: %x", pDesc->Height);
     TRACE("  Width: %x", pDesc->Width);
-    TRACE("  SampleDesc Count: %x", pDesc->SampleDesc.Count);
-    TRACE("  SampleDesc Quality: %x", pDesc->SampleDesc.Quality);
+    TRACE("  SampleDesc Count: %d", pDesc->SampleDesc.Count);
+    TRACE("  SampleDesc Quality: %d", pDesc->SampleDesc.Quality);
 
     UINT flags = 0;
 
+    // Handle shared resources
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS");
+        TRACE("Resource has D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS");
         flags |= D3D11_RESOURCE_MISC_SHARED;
+        
+        // For textures, also set shared keyedmutex
+        if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+            flags |= D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+        }
     }
 
+    // Handle structured buffer
+    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+        (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)) {
+        flags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    }
+
+    // Handle texture cube
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
         pDesc->DepthOrArraySize == 6) {
-        TRACE("pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D");
         flags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
     }
 
-    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET &&
-        pDesc->MipLevels > 1) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET");
-        flags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-    }
-
-    TRACE("GetMiscFlags returns %#x", flags);
+    TRACE("GetMiscFlags returns 0x%x", flags);
     return flags;
 }
 
@@ -376,154 +383,166 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
 }
 
 HRESULT D3D11Resource::CreateBufferDefault(const D3D11_BUFFER_DESC& desc) {
-    TRACE("Creating buffer with DEFAULT strategy (size=%u bytes)", desc.ByteWidth);
-    
+    TRACE("Creating buffer with DEFAULT strategy (size=%u bytes)",
+          desc.ByteWidth);
+
     Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-    HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(&desc, nullptr, &buffer);
-    
+    HRESULT hr =
+        m_device->GetD3D11Device()->CreateBuffer(&desc, nullptr, &buffer);
+
     if (SUCCEEDED(hr)) {
         m_resource = buffer;
         StoreInDeviceMap();
     }
-    
+
     return hr;
 }
 
 HRESULT D3D11Resource::CreateBufferWithFallback(const D3D11_BUFFER_DESC& desc) {
-    TRACE("Creating buffer with FALLBACK strategy (size=%u bytes)", desc.ByteWidth);
-    
+    TRACE("Creating buffer with FALLBACK strategy (size=%u bytes)",
+          desc.ByteWidth);
+
     // First try: Default settings
     HRESULT hr = CreateBufferDefault(desc);
     if (SUCCEEDED(hr)) {
         return hr;
     }
-    
+
     // Second try: Add raw view support
     TRACE("Default creation failed, trying with raw view support");
     D3D11_BUFFER_DESC modifiedDesc = desc;
     modifiedDesc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-    
+
     Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-    hr = m_device->GetD3D11Device()->CreateBuffer(&modifiedDesc, nullptr, &buffer);
+    hr = m_device->GetD3D11Device()->CreateBuffer(&modifiedDesc, nullptr,
+                                                  &buffer);
     if (SUCCEEDED(hr)) {
         m_resource = buffer;
         StoreInDeviceMap();
         return hr;
     }
-    
+
     // Third try: Reduce size to 256MB
     if (desc.ByteWidth > 256 * 1024 * 1024) {
         TRACE("Raw view attempt failed, reducing size to 256MB");
         modifiedDesc.ByteWidth = 256 * 1024 * 1024;
-        hr = m_device->GetD3D11Device()->CreateBuffer(&modifiedDesc, nullptr, &buffer);
+        hr = m_device->GetD3D11Device()->CreateBuffer(&modifiedDesc, nullptr,
+                                                      &buffer);
         if (SUCCEEDED(hr)) {
             m_resource = buffer;
             StoreInDeviceMap();
             WARN("Created buffer with reduced size (256MB)");
         }
     }
-    
+
     return hr;
 }
 
 HRESULT D3D11Resource::CreateBufferInChunks(const D3D11_BUFFER_DESC& desc) {
-    TRACE("Creating buffer with SPLIT_CHUNKS strategy (size=%u bytes)", desc.ByteWidth);
-    
-    const UINT64 chunkSize = 128 * 1024 * 1024; // 128MB chunks
+    TRACE("Creating buffer with SPLIT_CHUNKS strategy (size=%u bytes)",
+          desc.ByteWidth);
+
+    const UINT64 chunkSize = 128 * 1024 * 1024;  // 128MB chunks
     UINT64 remainingSize = desc.ByteWidth;
     UINT64 currentOffset = 0;
-    
+
     while (remainingSize > 0) {
         UINT64 currentChunkSize = std::min(remainingSize, chunkSize);
-        
+
         D3D11_BUFFER_DESC chunkDesc = desc;
         chunkDesc.ByteWidth = static_cast<UINT>(currentChunkSize);
-        
+
         Microsoft::WRL::ComPtr<ID3D11Buffer> chunkBuffer;
-        HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(&chunkDesc, nullptr, &chunkBuffer);
-        
+        HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
+            &chunkDesc, nullptr, &chunkBuffer);
+
         if (FAILED(hr)) {
-            ERR("Failed to create chunk buffer %llu (size=%llu), hr %#x", 
+            ERR("Failed to create chunk buffer %llu (size=%llu), hr %#x",
                 m_chunks.size(), currentChunkSize, hr);
             return hr;
         }
-        
+
         ChunkInfo chunk;
         chunk.offset = currentOffset;
         chunk.size = currentChunkSize;
         chunk.buffer = chunkBuffer;
         m_chunks.push_back(chunk);
-        
-        TRACE("Created chunk %zu: offset=%llu, size=%llu", 
-              m_chunks.size()-1, currentOffset, currentChunkSize);
-        
+
+        TRACE("Created chunk %zu: offset=%llu, size=%llu", m_chunks.size() - 1,
+              currentOffset, currentChunkSize);
+
         currentOffset += currentChunkSize;
         remainingSize -= currentChunkSize;
     }
-    
+
     // Store the first chunk as the main resource
     if (!m_chunks.empty()) {
         m_resource = m_chunks[0].buffer;
         StoreInDeviceMap();
     }
-    
+
     return S_OK;
 }
 
 HRESULT D3D11Resource::GetBufferDesc(D3D11_BUFFER_DESC* desc) const {
     if (!desc) return E_INVALIDARG;
-    
+
     Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
     HRESULT hr = m_resource.As(&buffer);
     if (FAILED(hr)) return hr;
-    
+
     buffer->GetDesc(desc);
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
-                                            const D3D12_RANGE* pReadRange,
-                                            void** ppData) {
-    TRACE("D3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
-    TRACE("Current resource state: %s", GetD3D12ResourceStateString(m_currentState).c_str());
+                                             const D3D12_RANGE* pReadRange,
+                                             void** ppData) {
+    TRACE("D3D11Resource::Map %d, %p", Subresource, pReadRange);
+    TRACE("Current resource state: %#x", m_currentState);
 
-    if (!ppData) {
-        ERR("Map called with null ppData");
+    // Don't allow mapping of shared resources directly
+    if (m_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
+        TRACE("err: Cannot directly map shared resource");
         return E_INVALIDARG;
     }
 
     // Get buffer properties for logging
     D3D11_BUFFER_DESC desc;
     if (SUCCEEDED(GetBufferDesc(&desc))) {
-        TRACE("Buffer properties: Usage=%s, ByteWidth=%u, CPUAccessFlags=%s, BindFlags=%s",
-              GetD3D11UsageName(desc.Usage), desc.ByteWidth,
-              GetD3D11CPUAccessFlagsString(desc.CPUAccessFlags).c_str(),
-              GetD3D11BindFlagsString(desc.BindFlags).c_str());
+        TRACE(
+            "Buffer properties: Usage=%s, ByteWidth=%u, CPUAccessFlags=%s, "
+            "BindFlags=%s",
+            GetD3D11UsageName(desc.Usage), desc.ByteWidth,
+            GetD3D11CPUAccessFlagsString(desc.CPUAccessFlags).c_str(),
+            GetD3D11BindFlagsString(desc.BindFlags).c_str());
     }
 
     // For chunked buffers, map the appropriate chunk
     if (!m_chunks.empty()) {
         TRACE("Mapping chunked buffer with %zu chunks", m_chunks.size());
-        
+
         // For now, just map the first chunk as a test
         // TODO: Calculate correct chunk based on offset
         Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
         m_device->GetD3D11Device()->GetImmediateContext(&context);
-        
+
         D3D11_MAPPED_SUBRESOURCE chunkMapped;
         // For UPLOAD heaps, use WRITE_DISCARD for better performance
-        D3D11_MAP mapType = (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD) 
-            ? D3D11_MAP_WRITE_DISCARD 
-            : D3D11_MAP_READ_WRITE;
-            
-        HRESULT hr = context->Map(m_chunks[0].buffer.Get(), 0, mapType, 0, &chunkMapped);
-        
+        D3D11_MAP mapType = (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD)
+                                ? D3D11_MAP_WRITE_DISCARD
+                                : D3D11_MAP_READ_WRITE;
+
+        HRESULT hr =
+            context->Map(m_chunks[0].buffer.Get(), 0, mapType, 0, &chunkMapped);
+
         if (SUCCEEDED(hr)) {
             *ppData = chunkMapped.pData;
-            TRACE("Successfully mapped first chunk (size=%llu)", m_chunks[0].size);
+            TRACE("Successfully mapped first chunk (size=%llu)",
+                  m_chunks[0].size);
             return S_OK;
         }
-        
+
         ERR("Failed to map chunk buffer, hr %#x", hr);
         return hr;
     }
@@ -533,16 +552,28 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
     m_device->GetD3D11Device()->GetImmediateContext(&context);
 
     D3D11_MAPPED_SUBRESOURCE mappedResource;
-    // For UPLOAD heaps, use WRITE_DISCARD for better performance
-    D3D11_MAP mapType = (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD) 
-        ? D3D11_MAP_WRITE_DISCARD 
-        : D3D11_MAP_READ_WRITE;
+    D3D11_MAP mapType;
+
+    // Determine appropriate map type based on heap properties and usage
+    if (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD) {
+        mapType = D3D11_MAP_WRITE_DISCARD;
+    } else if (m_heapProperties.Type == D3D12_HEAP_TYPE_READBACK) {
+        mapType = D3D11_MAP_READ;
+    } else if (desc.Usage == D3D11_USAGE_DYNAMIC) {
+        mapType = D3D11_MAP_WRITE_DISCARD;
+    } else if (desc.Usage == D3D11_USAGE_DEFAULT) {
+        ERR("Cannot directly map DEFAULT usage buffer");
+        return E_INVALIDARG;
+    } else {
+        mapType = D3D11_MAP_READ_WRITE;
+    }
 
     TRACE("Mapping buffer with type %s (usage=%s, size=%u, state=%s)",
           GetD3D11MapTypeName(mapType), GetD3D11UsageName(desc.Usage),
           desc.ByteWidth, GetD3D12ResourceStateString(m_currentState).c_str());
 
-    HRESULT hr = context->Map(m_resource.Get(), Subresource, mapType, 0, &mappedResource);
+    HRESULT hr = context->Map(m_resource.Get(), Subresource, mapType, 0,
+                              &mappedResource);
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
     }
@@ -571,53 +602,51 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
     const D3D12_RESOURCE_DESC* pDesc,
     const D3D12_HEAP_PROPERTIES* pHeapProperties) {
     TRACE("D3D11Resource::GetD3D11BindFlags called");
+    
+    UINT flags = 0;
 
-    D3D11_BIND_FLAG flags = (D3D11_BIND_FLAG)0;
-
-    // For UPLOAD heaps, we need vertex/index/constant buffer bindings
-    if (pHeapProperties && pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD) {
-        flags = (D3D11_BIND_FLAG)(D3D11_BIND_VERTEX_BUFFER | 
-                                 D3D11_BIND_INDEX_BUFFER | 
-                                 D3D11_BIND_CONSTANT_BUFFER);
-        return flags;
-    }
-
-    // For other resources, check flags as before
-    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-        flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_SHADER_RESOURCE);
-    }
-
-    // For swap chain buffers, we need both RT and SRV capabilities
-    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET");
-        flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_RENDER_TARGET);
-
-        // If it's a render target and not explicitly denied shader resource,
-        // assume it needs shader resource capability (common for swap chains)
-        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-            TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
-            flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_SHADER_RESOURCE);
+    // For shared resources, we need additional bind flags
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
+        flags |= D3D11_BIND_SHADER_RESOURCE;
+        // For textures, also allow render target binding
+        if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+            flags |= D3D11_BIND_RENDER_TARGET;
         }
     }
 
+    // Handle render target flag
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
+        flags |= D3D11_BIND_RENDER_TARGET;
+        // For render targets, also allow shader resource if not explicitly denied
+        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
+            flags |= D3D11_BIND_SHADER_RESOURCE;
+        }
+    }
+
+    // Handle depth stencil flag
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL");
-        flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_DEPTH_STENCIL);
+        flags |= D3D11_BIND_DEPTH_STENCIL;
     }
+
+    // Handle unordered access flag
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
-        flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_UNORDERED_ACCESS);
+        flags |= D3D11_BIND_UNORDERED_ACCESS;
     }
 
-    // For non-render targets, add shader resource if not denied
-    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) &&
+    // For upload heaps, allow vertex/index/constant buffer binding
+    if (pHeapProperties && pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD) {
+        flags |= (D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | D3D11_BIND_CONSTANT_BUFFER);
+    }
+
+    // For default heaps with no other flags and not denied shader resource, allow shader resource
+    if (flags == 0 && pHeapProperties && 
+        pHeapProperties->Type == D3D12_HEAP_TYPE_DEFAULT &&
         !(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-        TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
-        flags = (D3D11_BIND_FLAG)(flags | D3D11_BIND_SHADER_RESOURCE);
+        flags |= D3D11_BIND_SHADER_RESOURCE;
     }
 
-    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x", pDesc->Flags,
-          flags);
-    return flags;
+    TRACE("Resource flags: 0x%x -> D3D11 bind flags: 0x%x", pDesc->Flags, flags);
+    return static_cast<D3D11_BIND_FLAG>(flags);
 }
 
 DXGI_FORMAT D3D11Resource::GetViewFormat(DXGI_FORMAT format) {
@@ -651,25 +680,39 @@ DXGI_FORMAT D3D11Resource::GetViewFormat(DXGI_FORMAT format) {
 }
 
 D3D11_USAGE D3D11Resource::GetD3D11Usage(
-    const D3D12_HEAP_PROPERTIES* pHeapProperties) {
+    const D3D12_HEAP_PROPERTIES* pHeapProperties,
+    const D3D12_RESOURCE_DESC* pDesc) {
     TRACE("D3D11Resource::GetD3D11Usage called");
+    
+    // For shared resources, we need to use DEFAULT
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
+        return D3D11_USAGE_DEFAULT;
+    }
+
     switch (pHeapProperties->Type) {
         case D3D12_HEAP_TYPE_DEFAULT:
-            return D3D11_USAGE_DEFAULT;
-        case D3D12_HEAP_TYPE_UPLOAD:
-            return D3D11_USAGE_DYNAMIC;
-        case D3D12_HEAP_TYPE_READBACK:
-            return D3D11_USAGE_STAGING;
-        case D3D12_HEAP_TYPE_CUSTOM:
-            if (pHeapProperties->CPUPageProperty ==
-                D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) {
+            // For textures that need CPU access, use DYNAMIC
+            if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+                (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)) {
                 return D3D11_USAGE_DYNAMIC;
             }
-            if (pHeapProperties->CPUPageProperty ==
-                D3D12_CPU_PAGE_PROPERTY_WRITE_BACK) {
+            return D3D11_USAGE_DEFAULT;
+            
+        case D3D12_HEAP_TYPE_UPLOAD:
+            return D3D11_USAGE_DYNAMIC;
+            
+        case D3D12_HEAP_TYPE_READBACK:
+            return D3D11_USAGE_STAGING;
+            
+        case D3D12_HEAP_TYPE_CUSTOM:
+            if (pHeapProperties->CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) {
+                return D3D11_USAGE_DYNAMIC;
+            }
+            if (pHeapProperties->CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_BACK) {
                 return D3D11_USAGE_STAGING;
             }
             return D3D11_USAGE_DEFAULT;
+            
         default:
             return D3D11_USAGE_DEFAULT;
     }

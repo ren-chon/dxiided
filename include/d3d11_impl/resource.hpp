@@ -111,7 +111,8 @@ class D3D11Resource final : public ID3D12Resource {
 
     static DXGI_FORMAT GetViewFormat(DXGI_FORMAT format);
     static D3D11_USAGE GetD3D11Usage(
-        const D3D12_HEAP_PROPERTIES* pHeapProperties);
+        const D3D12_HEAP_PROPERTIES* pHeapProperties,
+        const D3D12_RESOURCE_DESC* pDesc);
 
     D3D11Device* m_device;
     Microsoft::WRL::ComPtr<ID3D11Resource> m_resource;
