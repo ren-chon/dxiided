@@ -386,11 +386,26 @@ HRESULT D3D11Resource::CreateBufferDefault(const D3D11_BUFFER_DESC& desc) {
     TRACE("Creating buffer with DEFAULT strategy (size=%u bytes)",
           desc.ByteWidth);
 
+    D3D11_BUFFER_DESC modifiedDesc = desc;
+    
+    // For UAV buffers, we need to:
+    // 1. Add structured buffer support if not a raw buffer
+    // 2. Set a valid structure stride (default to 4 bytes)
+    if (desc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) {
+        TRACE("UAV buffer");
+        if (!(modifiedDesc.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS)) {
+            TRACE("Adding structured buffer support");
+            modifiedDesc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            modifiedDesc.StructureByteStride = 4;  // Default to 4-byte stride
+        }
+    }
+
     Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
     HRESULT hr =
-        m_device->GetD3D11Device()->CreateBuffer(&desc, nullptr, &buffer);
+        m_device->GetD3D11Device()->CreateBuffer(&modifiedDesc, nullptr, &buffer);
 
     if (SUCCEEDED(hr)) {
+        TRACE("Created buffer");
         m_resource = buffer;
         StoreInDeviceMap();
     }
@@ -495,89 +510,83 @@ HRESULT D3D11Resource::GetBufferDesc(D3D11_BUFFER_DESC* desc) const {
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
-                                             const D3D12_RANGE* pReadRange,
-                                             void** ppData) {
+HRESULT D3D11Resource::Map(UINT Subresource,
+                        const D3D12_RANGE* pReadRange,
+                        void** ppData) {
     TRACE("D3D11Resource::Map %d, %p", Subresource, pReadRange);
-    TRACE("Current resource state: %#x", m_currentState);
+    TRACE("Current resource state: %s", GetD3D12ResourceStateName(m_currentState));
 
     // Don't allow mapping of shared resources directly
     if (m_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS) {
-        TRACE("err: Cannot directly map shared resource");
         return E_INVALIDARG;
     }
 
-    // Get buffer properties for logging
     D3D11_BUFFER_DESC desc;
-    if (SUCCEEDED(GetBufferDesc(&desc))) {
-        TRACE(
-            "Buffer properties: Usage=%s, ByteWidth=%u, CPUAccessFlags=%s, "
-            "BindFlags=%s",
-            GetD3D11UsageName(desc.Usage), desc.ByteWidth,
-            GetD3D11CPUAccessFlagsString(desc.CPUAccessFlags).c_str(),
-            GetD3D11BindFlagsString(desc.BindFlags).c_str());
-    }
+    GetBufferDesc(&desc);  
 
-    // For chunked buffers, map the appropriate chunk
-    if (!m_chunks.empty()) {
-        TRACE("Mapping chunked buffer with %zu chunks", m_chunks.size());
+    TRACE("Buffer properties: Usage=%s, ByteWidth=%u, CPUAccessFlags=%#x, BindFlags=%#x",
+          GetD3D11UsageName(desc.Usage), desc.ByteWidth,
+          desc.CPUAccessFlags, desc.BindFlags);
 
-        // For now, just map the first chunk as a test
-        // TODO: Calculate correct chunk based on offset
-        Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
-        m_device->GetD3D11Device()->GetImmediateContext(&context);
+    // For DEFAULT buffers, we need to use a staging buffer
+    if (desc.Usage == D3D11_USAGE_DEFAULT) {
+        if (!m_stagingBuffer) {
+            // Create staging buffer if it doesn't exist
+            D3D11_BUFFER_DESC stagingDesc = desc;
+            stagingDesc.Usage = D3D11_USAGE_STAGING;
+            stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            stagingDesc.BindFlags = 0;
+            stagingDesc.MiscFlags &= ~D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 
-        D3D11_MAPPED_SUBRESOURCE chunkMapped;
-        // For UPLOAD heaps, use WRITE_DISCARD for better performance
-        D3D11_MAP mapType = (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD)
-                                ? D3D11_MAP_WRITE_DISCARD
-                                : D3D11_MAP_READ_WRITE;
-
-        HRESULT hr =
-            context->Map(m_chunks[0].buffer.Get(), 0, mapType, 0, &chunkMapped);
-
-        if (SUCCEEDED(hr)) {
-            *ppData = chunkMapped.pData;
-            TRACE("Successfully mapped first chunk (size=%llu)",
-                  m_chunks[0].size);
-            return S_OK;
+            HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
+                &stagingDesc, nullptr, &m_stagingBuffer);
+            if (FAILED(hr))
+                return hr;
         }
 
-        ERR("Failed to map chunk buffer, hr %#x", hr);
+        // Map the staging buffer instead
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
+        m_device->GetD3D11Device()->GetImmediateContext(&context);
+        HRESULT hr = context->Map(
+            m_stagingBuffer.Get(), Subresource, D3D11_MAP_WRITE_DISCARD,
+            0, &mappedResource);
+        if (SUCCEEDED(hr))
+            *ppData = mappedResource.pData;
         return hr;
     }
 
-    // For normal buffers
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
-    m_device->GetD3D11Device()->GetImmediateContext(&context);
-
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    D3D11_MAP mapType;
-
-    // Determine appropriate map type based on heap properties and usage
-    if (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD) {
-        mapType = D3D11_MAP_WRITE_DISCARD;
-    } else if (m_heapProperties.Type == D3D12_HEAP_TYPE_READBACK) {
-        mapType = D3D11_MAP_READ;
-    } else if (desc.Usage == D3D11_USAGE_DYNAMIC) {
-        mapType = D3D11_MAP_WRITE_DISCARD;
-    } else if (desc.Usage == D3D11_USAGE_DEFAULT) {
-        ERR("Cannot directly map DEFAULT usage buffer");
-        return E_INVALIDARG;
+    // For other buffer types, proceed with normal mapping
+    if (m_chunks.empty()) {
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
+        m_device->GetD3D11Device()->GetImmediateContext(&context);
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        HRESULT hr = context->Map(
+            m_resource.Get(), Subresource, D3D11_MAP_WRITE_DISCARD,
+            0, &mappedResource);
+        if (SUCCEEDED(hr))
+            *ppData = mappedResource.pData;
+        return hr;
     } else {
-        mapType = D3D11_MAP_READ_WRITE;
+        // Handle chunked buffer mapping
+        TRACE("Mapping chunked buffer with %zu chunks", m_chunks.size());
+        
+        // Map first chunk
+        Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
+        m_device->GetD3D11Device()->GetImmediateContext(&context);
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        HRESULT hr = context->Map(
+            m_chunks[0].buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0,
+            &mappedResource);
+            
+        if (SUCCEEDED(hr)) {
+            *ppData = mappedResource.pData;
+            TRACE("Successfully mapped first chunk (size=%u)", 
+                  desc.ByteWidth / m_chunks.size());
+        }
+                  
+        return hr;
     }
-
-    TRACE("Mapping buffer with type %s (usage=%s, size=%u, state=%s)",
-          GetD3D11MapTypeName(mapType), GetD3D11UsageName(desc.Usage),
-          desc.ByteWidth, GetD3D12ResourceStateString(m_currentState).c_str());
-
-    HRESULT hr = context->Map(m_resource.Get(), Subresource, mapType, 0,
-                              &mappedResource);
-    if (SUCCEEDED(hr)) {
-        *ppData = mappedResource.pData;
-    }
-    return hr;
 }
 
 void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
@@ -631,6 +640,7 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
     // Handle unordered access flag
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
         flags |= D3D11_BIND_UNORDERED_ACCESS;
+        flags |= D3D11_BIND_SHADER_RESOURCE;  // Include SRV binding for UAV buffers
     }
 
     // For upload heaps, allow vertex/index/constant buffer binding
