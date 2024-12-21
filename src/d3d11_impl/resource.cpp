@@ -430,30 +430,44 @@ HRESULT D3D11Resource::Map(UINT Subresource,
         return E_INVALIDARG;
     }
     
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    ID3D11DeviceContext* context = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
     m_device->GetD3D11Device()->GetImmediateContext(&context);
+    if (!context) {
+        ERR("Failed to get immediate context");
+        return E_FAIL;
+    }
+    
+    D3D11_MAPPED_SUBRESOURCE mappedResource = {};
     
     // For chunked buffers, map the appropriate chunk
     if (!m_chunks.empty()) {
         TRACE("Mapping chunked buffer with %zu chunks", m_chunks.size());
-        // Find the chunk containing the subresource
-        for (const auto& chunk : m_chunks) {
-            HRESULT hr = context->Map(chunk.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD,
-                                    0, &mappedResource);
-            if (SUCCEEDED(hr)) {
-                *ppData = mappedResource.pData;
-                TRACE("Successfully mapped chunk at offset %llu", chunk.offset);
-                return S_OK;
-            }
-            WARN("Failed to map chunk at offset %llu", chunk.offset);
+        
+        // Get the first chunk's properties
+        D3D11_BUFFER_DESC chunkDesc;
+        m_chunks[0].buffer->GetDesc(&chunkDesc);
+        
+        // Determine appropriate mapping type
+        D3D11_MAP mapType = D3D11_MAP_WRITE;
+        if (chunkDesc.Usage == D3D11_USAGE_DYNAMIC) {
+            mapType = D3D11_MAP_WRITE_DISCARD;
         }
-        ERR("Failed to map any chunks in chunked buffer");
-        return E_FAIL;
+        
+        // For upload buffers, only map the first chunk
+        HRESULT hr = context->Map(m_chunks[0].buffer.Get(), 0, 
+                                mapType, 0, &mappedResource);
+        if (SUCCEEDED(hr)) {
+            *ppData = mappedResource.pData;
+            TRACE("Successfully mapped chunk with type %d", mapType);
+            return S_OK;
+        }
+        
+        ERR("Failed to map chunk with type %d (hr=%08X)", mapType, hr);
+        return hr;
     }
     
     // For regular resources
-    D3D11_MAP mapType;
+    D3D11_MAP mapType = D3D11_MAP_WRITE;
     UINT mapFlags = 0;
     
     // Determine map type based on usage
@@ -474,18 +488,18 @@ HRESULT D3D11Resource::Map(UINT Subresource,
               GetD3D11MapTypeName(mapType), GetD3D11UsageName(desc.Usage));
     } else {
         WARN("Failed to get buffer description, defaulting to MAP_WRITE");
-        mapType = D3D11_MAP_WRITE;
     }
     
     HRESULT hr = context->Map(m_resource.Get(), Subresource, mapType,
                              mapFlags, &mappedResource);
     if (FAILED(hr)) {
         ERR("Failed to map resource with type %s", GetD3D11MapTypeName(mapType));
-    } else {
-        TRACE("Successfully mapped resource");
-        *ppData = mappedResource.pData;
+        return hr;
     }
-    return hr;
+    
+    TRACE("Successfully mapped resource");
+    *ppData = mappedResource.pData;
+    return S_OK;
 }
 
 void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {

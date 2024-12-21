@@ -25,90 +25,94 @@ HRESULT D3D11SwapChain::Create(
     TRACE(" BufferCount: %u", desc->BufferCount);
 
     // Validate buffer count
-    UINT buffer_count = desc->BufferCount < 1   ? 1
-                        : desc->BufferCount > 2 ? 2
-                                                : desc->BufferCount;
+    UINT buffer_count = desc->BufferCount;
+    if (buffer_count < 2) {
+        TRACE("Buffer count must be at least 2 for flip model, adjusting from %u to 2", buffer_count);
+        buffer_count = 2;
+    }
+    // For flip model, we need to ensure proper resource states
+    DXGI_SWAP_CHAIN_DESC1 modified_desc = *desc;
 
-    if (buffer_count != desc->BufferCount) {
-        ERR("Adjusted buffer count from %u to %u", desc->BufferCount,
-            buffer_count);
+    // Keep original buffer count if valid
+    if (buffer_count < 2) {
+        TRACE("Buffer count must be at least 2 for flip model, adjusting from %u to 2", buffer_count);
+        buffer_count = 2;
+    }
+    modified_desc.BufferCount = buffer_count;
+
+    // Handle flip model requirements
+    if (desc->SwapEffect == DXGI_SWAP_EFFECT_FLIP_DISCARD) {
+        // For FLIP_DISCARD, preserve all original settings
+        TRACE("Using original FLIP_DISCARD swap effect");
+        modified_desc.SwapEffect = desc->SwapEffect;
+        modified_desc.Flags = desc->Flags;
+    } else {
+        // For other modes, convert to FLIP_SEQUENTIAL
+        TRACE("Converting swap effect from %d to DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL", desc->SwapEffect);
+        modified_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        modified_desc.Flags = desc->Flags | DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     }
 
-    DXGI_SWAP_CHAIN_DESC swapchain_desc = {};
-    swapchain_desc.BufferDesc.Width = desc->Width;
-    swapchain_desc.BufferDesc.Height = desc->Height;
-    swapchain_desc.BufferDesc.Format = desc->Format;
-    swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
-    swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
-    swapchain_desc.SampleDesc.Count = 1;
-    swapchain_desc.SampleDesc.Quality = 0;
-    swapchain_desc.BufferUsage =
-        DXGI_USAGE_RENDER_TARGET_OUTPUT |
-        DXGI_USAGE_SHADER_INPUT;  // Allow both RT and SRV
-    swapchain_desc.BufferCount = buffer_count;
-    swapchain_desc.OutputWindow = window;
-    swapchain_desc.Windowed =
-        TRUE;  // We'll handle fullscreen transitions separately
-    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-    swapchain_desc.Flags = desc->Flags;
-
-    // Get the D3D11 device
-    ID3D11Device* d3d11Device = device->GetD3D11Device();
-    if (!d3d11Device) {
-        ERR("Failed to get D3D11 device.");
-        return E_FAIL;
+    // Always ensure proper buffer usage for flip model
+    modified_desc.BufferUsage = desc->BufferUsage;
+    if (!(modified_desc.BufferUsage & DXGI_USAGE_RENDER_TARGET_OUTPUT)) {
+        TRACE("Adding required DXGI_USAGE_RENDER_TARGET_OUTPUT flag");
+        modified_desc.BufferUsage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
     }
 
-    TRACE("D3D11 device pointer: %p", d3d11Device);
-    // Verify device is valid by trying to query interface
-    Microsoft::WRL::ComPtr<IUnknown> unk;
-    HRESULT hr = d3d11Device->QueryInterface(__uuidof(IUnknown), &unk);
-    if (FAILED(hr)) {
-        ERR("D3D11 device appears invalid - QueryInterface failed, hr %#x.",
-            hr);
-        return hr;
+    // Handle depth format conversion
+    if (modified_desc.Format == DXGI_FORMAT_D32_FLOAT) {
+        TRACE("Converting depth format D32_FLOAT to R32_TYPELESS");
+        modified_desc.Format = DXGI_FORMAT_R32_TYPELESS;
     }
-    TRACE("D3D11 device validated successfully");
+    
+    // Force single sample for flip model
+    modified_desc.SampleDesc.Count = 1;
+    modified_desc.SampleDesc.Quality = 0;
 
-    // Log device details
-    D3D_FEATURE_LEVEL featureLevel = d3d11Device->GetFeatureLevel();
-    TRACE("D3D11 device feature level: %#x", featureLevel);
+    // Log original descriptor
+    TRACE("Original swap chain descriptor:");
+    TRACE("  Width: %u", desc->Width);
+    TRACE("  Height: %u", desc->Height);
+    TRACE("  Format: %d", desc->Format);
+    TRACE("  Stereo: %d", desc->Stereo);
+    TRACE("  SampleDesc.Count: %u", desc->SampleDesc.Count);
+    TRACE("  SampleDesc.Quality: %u", desc->SampleDesc.Quality);
+    TRACE("  BufferUsage: %#x", desc->BufferUsage);
+    TRACE("  BufferCount: %u", desc->BufferCount);
+    TRACE("  Scaling: %d", desc->Scaling);
+    TRACE("  SwapEffect: %d", desc->SwapEffect);
+    TRACE("  AlphaMode: %d", desc->AlphaMode);
+    TRACE("  Flags: %#x", desc->Flags);
 
-    // Verify factory
-    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
-    hr = d3d11Device->QueryInterface(__uuidof(IDXGIDevice), &dxgiDevice);
-    if (FAILED(hr)) {
-        ERR("Failed to get DXGI device, hr %#x.", hr);
-        return hr;
-    }
-    TRACE("Got DXGI device interface");
-
-    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-    hr = dxgiDevice->GetAdapter(&adapter);
-    if (FAILED(hr)) {
-        ERR("Failed to get DXGI adapter, hr %#x.", hr);
-        return hr;
-    }
-    TRACE("Got DXGI adapter");
-
-    Microsoft::WRL::ComPtr<IDXGIFactory> deviceFactory;
-    hr = adapter->GetParent(IID_PPV_ARGS(&deviceFactory));
-    if (FAILED(hr)) {
-        ERR("Failed to get DXGI factory from adapter, hr %#x.", hr);
-        return hr;
-    }
-    TRACE("Got DXGI factory from device");
-
+    // Also log our modified descriptor
+    TRACE("Modified swap chain descriptor:");
+    TRACE("  Width: %u", modified_desc.Width);
+    TRACE("  Height: %u", modified_desc.Height);
+    TRACE("  Format: %d", modified_desc.Format);
+    TRACE("  Stereo: %d", modified_desc.Stereo);
+    TRACE("  SampleDesc.Count: %u", modified_desc.SampleDesc.Count);
+    TRACE("  SampleDesc.Quality: %u", modified_desc.SampleDesc.Quality);
+    TRACE("  BufferUsage: %#x", modified_desc.BufferUsage);
+    TRACE("  BufferCount: %u", modified_desc.BufferCount);
+    TRACE("  Scaling: %d", modified_desc.Scaling);
+    TRACE("  SwapEffect: %d", modified_desc.SwapEffect);
+    TRACE("  AlphaMode: %d", modified_desc.AlphaMode);
+    TRACE("  Flags: %#x", modified_desc.Flags);
     // Create the swap chain
-    TRACE("Create the swap chain using D3D11 device");
-    TRACE("  Using factory: %p", factory);
-    TRACE("  Using D3D11 device: %p", d3d11Device);
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> base_swapchain;
 
-    TRACE("Creating swap chain with %u buffers", buffer_count);
+    // Get IDXGIFactory2 interface
+    Microsoft::WRL::ComPtr<IDXGIFactory2> factory2;
+    HRESULT hr = factory->QueryInterface(__uuidof(IDXGIFactory2), &factory2);
+    if (FAILED(hr)) {
+        ERR("Failed to get IDXGIFactory2 interface, hr %#x", hr);
+        return hr;
+    }
 
-    Microsoft::WRL::ComPtr<IDXGISwapChain> base_swapchain;
-    hr =
-        factory->CreateSwapChain(d3d11Device, &swapchain_desc, &base_swapchain);
+    hr = factory2->CreateSwapChainForHwnd(
+        device->GetD3D11Device(), window, &modified_desc, fullscreen_desc, output,
+        base_swapchain.GetAddressOf());
 
     if (FAILED(hr)) {
         ERR("Failed to create swap chain, hr %#x", hr);
@@ -137,6 +141,7 @@ HRESULT D3D11SwapChain::Create(
     return S_OK;
 }
 
+
 HRESULT D3D11SwapChain::InitBackBuffers() {
     TRACE("D3D11SwapChain::InitBackBuffers");
 
@@ -149,17 +154,11 @@ HRESULT D3D11SwapChain::InitBackBuffers() {
     }
 
     TRACE(
-        "Swap chain desc - BufferCount: %u, Width: %u, Height: %u, Format: "
-        "%d",
+        "Swap chain desc - BufferCount: %u, Width: %u, Height: %u, Format: %d",
         desc.BufferCount, desc.BufferDesc.Width, desc.BufferDesc.Height,
         desc.BufferDesc.Format);
 
-    // Validate buffer count matches what we requested
-    if (desc.BufferCount < 1 || desc.BufferCount > 2) {
-        ERR("Unexpected buffer count %u from swap chain", desc.BufferCount);
-        return E_UNEXPECTED;
-    }
-
+    // Store swap chain properties
     m_buffer_count = desc.BufferCount;
     m_format = desc.BufferDesc.Format;
     m_width = desc.BufferDesc.Width;
@@ -168,61 +167,61 @@ HRESULT D3D11SwapChain::InitBackBuffers() {
     // Clear existing back buffers
     ReleaseBackBuffers();
 
-    // Reserve space to avoid reallocations
+    // Reserve space for buffers
     m_backbuffers.reserve(desc.BufferCount);
     m_renderTargetViews.reserve(desc.BufferCount);
 
-    // Create RTVs for all buffers
+    // Create D3D11 textures that we'll use as backing storage for D3D12 resources
     for (UINT i = 0; i < desc.BufferCount; i++) {
-        TRACE("Attempting to get buffer %u of %u", i, desc.BufferCount);
+        TRACE("Creating D3D11 texture for buffer %u of %u", i, desc.BufferCount);
 
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> buffer;
-        hr = m_base_swapchain->GetBuffer(
-            i, __uuidof(ID3D11Texture2D),
-            reinterpret_cast<void**>(buffer.GetAddressOf()));
+        // Create D3D11 texture that will back the D3D12 resource
+        D3D11_TEXTURE2D_DESC texDesc = {};
+        texDesc.Width = m_width;
+        texDesc.Height = m_height;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = m_format;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.SampleDesc.Quality = 0;
+        texDesc.Usage = D3D11_USAGE_DEFAULT;
+        texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        texDesc.CPUAccessFlags = 0;
+        texDesc.MiscFlags = 0;
 
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        hr = m_device->CreateTexture2D(&texDesc, nullptr, &texture);
         if (FAILED(hr)) {
-            ERR("Failed to get back buffer %u, hr %#x - this is required for "
-                "proper operation",
-                i, hr);
-            return hr;  // Fail if we can't get all buffers
+            ERR("Failed to create D3D11 texture for buffer %u, hr %#x", i, hr);
+            return hr;
         }
-
-        D3D11_TEXTURE2D_DESC tex_desc;
-        buffer->GetDesc(&tex_desc);
-        TRACE(
-            "Back buffer %u validated - Width: %u, Height: %u, Format: %d, "
-            "ArraySize: %u, BindFlags: %#x",
-            i, tex_desc.Width, tex_desc.Height, tex_desc.Format,
-            tex_desc.ArraySize, tex_desc.BindFlags);
-
-        // Create RTV description
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
-        rtv_desc.Format = tex_desc.Format;
-        rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        rtv_desc.Texture2D.MipSlice = 0;
 
         // Create render target view
+        D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = texDesc.Format;
+        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        rtvDesc.Texture2D.MipSlice = 0;
+
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
-        hr = m_device->CreateRenderTargetView(buffer.Get(), &rtv_desc, &rtv);
+        hr = m_device->CreateRenderTargetView(texture.Get(), &rtvDesc, &rtv);
         if (FAILED(hr)) {
-            ERR("Failed to create RTV for back buffer %u, hr %#x.", i, hr);
-            return hr;  // Still fail if we can't create RTV
+            ERR("Failed to create RTV for buffer %u, hr %#x", i, hr);
+            return hr;
         }
 
-        m_backbuffers.push_back(std::move(buffer));
+        m_backbuffers.push_back(std::move(texture));
         m_renderTargetViews.push_back(std::move(rtv));
-        TRACE("Created back buffer %u with RTV", i);
+        TRACE("Created D3D11 back buffer %u with RTV", i);
     }
 
-    // Update actual buffer count
-    m_buffer_count = static_cast<UINT>(m_backbuffers.size());
-
-    TRACE("Successfully initialized %u back buffers", m_buffer_count);
     return S_OK;
 }
 
-HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
+HRESULT D3D11SwapChain::GetBuffer(
+    UINT Buffer,
+    REFIID riid,
+    void** ppSurface) {
+    
     TRACE("D3D11SwapChain::GetBuffer %u, %s, %p", Buffer,
           debugstr_guid(&riid).c_str(), ppSurface);
 
@@ -234,51 +233,20 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
 
     *ppSurface = nullptr;
 
-    if (riid == __uuidof(ID3D11Texture2D)) {
-        TRACE("Returning D3D11 texture for buffer %u", Buffer);
-        m_backbuffers[Buffer]->AddRef();
-        *ppSurface = m_backbuffers[Buffer].Get();
-        return S_OK;
-    }
-
-    // Try to get the underlying D3D12 resource from the base swapchain
+    // The game will request a D3D12 resource, so we need to create a D3D11Resource
+    // wrapper that presents as a D3D12 resource but translates operations to D3D11
     if (riid == __uuidof(ID3D12Resource)) {
-        TRACE("Game requesting D3D12 resource for backbuffer");
-
-        // Create resource description for the back buffer
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width = m_width;
-        desc.Height = m_height;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Format = m_format;
-        desc.SampleDesc = {1, 0};
-        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-        TRACE("Back buffer description: Width: %u, Height: %u, Format: %d",
-              desc.Width, desc.Height, desc.Format);
-
-        // Set up heap properties for the back buffer
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-        heapProps.CreationNodeMask = 1;
-        heapProps.VisibleNodeMask = 1;
-
-        // Create D3D11Resource wrapper around the back buffer
+        TRACE("Creating D3D11Resource wrapper for back buffer %u", Buffer);
         return D3D11Resource::Create(
-            m_device, &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-            D3D12_RESOURCE_STATE_COMMON,
-            nullptr,  // No optimized clear value for swap chain
-            riid, ppSurface);
+            m_device,
+            m_backbuffers[Buffer].Get(),
+            riid,
+            ppSurface);
     }
-    TRACE("other interface");
-    // For any other interface, try querying our backbuffer
+
+    // For D3D11 interfaces, return our D3D11 texture
     return m_backbuffers[Buffer]->QueryInterface(riid, ppSurface);
 }
-
 
 void D3D11SwapChain::ReleaseBackBuffers() {
     TRACE("D3D11SwapChain::ReleaseBackBuffers");
