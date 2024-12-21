@@ -237,9 +237,25 @@ HRESULT D3D11SwapChain::GetBuffer(
     // wrapper that presents as a D3D12 resource but translates operations to D3D11
     if (riid == __uuidof(ID3D12Resource)) {
         TRACE("Creating D3D11Resource wrapper for back buffer %u", Buffer);
+        
+        // Create D3D12 resource description for the swapchain buffer
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = m_width;
+        desc.Height = m_height;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = m_format;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
         return D3D11Resource::Create(
             m_device,
             m_backbuffers[Buffer].Get(),
+            &desc,
+            D3D12_RESOURCE_STATE_PRESENT,  // Initial state for swapchain
             riid,
             ppSurface);
     }

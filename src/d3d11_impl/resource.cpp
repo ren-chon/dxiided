@@ -218,8 +218,34 @@ D3D11Resource::D3D11Resource(D3D11Device* device, ID3D11Resource* resource,
                              const D3D12_RESOURCE_DESC* pDesc,
                              D3D12_RESOURCE_STATES InitialState)
     : m_device(device), m_desc(*pDesc), m_currentState(InitialState) {
-           // TODO:
-
+    
+    TRACE("Creating D3D11Resource wrapper for existing resource");
+    
+    // Store the D3D11 resource
+    m_resource = resource;
+    m_resource->AddRef();  // Add reference since we're storing it
+    
+    // Query the resource type
+    D3D11_RESOURCE_DIMENSION dimension;
+    m_resource->GetType(&dimension);
+    
+    if (dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        // For textures, get the texture interface
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        if (SUCCEEDED(m_resource.As(&texture))) {
+            // Get texture description
+            D3D11_TEXTURE2D_DESC desc;
+            texture->GetDesc(&desc);
+            
+            TRACE("Wrapped D3D11 texture - Width: %u, Height: %u, Format: %d, BindFlags: %#x",
+                  desc.Width, desc.Height, desc.Format, desc.BindFlags);
+        }
+    }
+    
+    // Store in device's resource map for tracking
+    StoreInDeviceMap();
+    
+    TRACE("Successfully created D3D11Resource wrapper");
 }
 
 UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc, bool isUAV) {
