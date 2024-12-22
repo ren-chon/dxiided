@@ -78,11 +78,15 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
             bufferDesc.Usage = usage;
             bufferDesc.BindFlags = bindFlags;
             bufferDesc.CPUAccessFlags = 
-                (usage == D3D11_USAGE_DYNAMIC) ? (D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ)
-                : (usage == D3D11_USAGE_STAGING) ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                : 0;
+                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE :
+                (usage == D3D11_USAGE_STAGING) ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE) :
+                (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD) ? D3D11_CPU_ACCESS_WRITE :
+                (pHeapProperties->Type == D3D12_HEAP_TYPE_READBACK) ? D3D11_CPU_ACCESS_READ : 0;
             bufferDesc.MiscFlags = GetMiscFlags(pDesc);
             bufferDesc.StructureByteStride = 0;
+
+            TRACE("Creating buffer with Usage=%d, CPUAccessFlags=%d, BindFlags=%d",
+                  bufferDesc.Usage, bufferDesc.CPUAccessFlags, bufferDesc.BindFlags);
 
             Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
             HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
@@ -488,18 +492,40 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
                                              void** ppData) {
     TRACE("WrappedD3D12ToD3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
 
-    // For ring buffers, use NO_OVERWRITE to preserve existing data
+    if (!ppData) {
+        ERR("Invalid ppData parameter");
+        return E_INVALIDARG;
+    }
+
     D3D11_MAPPED_SUBRESOURCE mappedResource;
-    D3D11_MAP mapType = (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && 
-                        m_desc.Width > 1024 * 1024) ? // Likely a ring buffer if > 1MB
-                       D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD;
+    D3D11_MAP mapType;
+
+    // Determine map type based on heap properties and resource type
+    if (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+        if (m_heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD) {
+            mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+        } else if (m_heapProperties.Type == D3D12_HEAP_TYPE_READBACK) {
+            mapType = D3D11_MAP_READ;
+        } else if (m_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+            mapType = D3D11_MAP_WRITE_DISCARD;
+        } else {
+            // For dynamic buffers, use NO_OVERWRITE for better performance
+            mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
+        }
+    } else {
+        // For textures, use the default mapping strategy
+        mapType = D3D11_MAP_WRITE_DISCARD;
+    }
     
+    TRACE("Mapping resource with type %d", mapType);
     HRESULT hr = m_device->GetD3D11Context()->Map(m_resource.Get(), Subresource,
                                                  mapType, 0,
                                                  &mappedResource);
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
-        TRACE("Mapped %p", mappedResource.pData);
+        TRACE("Successfully mapped resource at %p", mappedResource.pData);
+    } else {
+        ERR("Failed to map resource with type %d, hr %#x", mapType, hr);
     }
 
     return hr;

@@ -31,9 +31,22 @@ WrappedD3D12ToD3D11Heap::WrappedD3D12ToD3D11Heap(WrappedD3D12ToD3D11Device* devi
     // Create a D3D11 buffer to back this heap
     D3D11_BUFFER_DESC bufferDesc = {};
     bufferDesc.ByteWidth = static_cast<UINT>(desc.SizeInBytes);
-    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-    bufferDesc.CPUAccessFlags = 0;
+    
+    // Set usage and CPU access flags based on heap properties
+    if (desc.Properties.Type == D3D12_HEAP_TYPE_UPLOAD) {
+        bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+        bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | D3D11_BIND_CONSTANT_BUFFER;
+    } else if (desc.Properties.Type == D3D12_HEAP_TYPE_READBACK) {
+        bufferDesc.Usage = D3D11_USAGE_STAGING;
+        bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        bufferDesc.BindFlags = 0;
+    } else {
+        bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+        bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+        bufferDesc.CPUAccessFlags = 0;
+    }
+    
     bufferDesc.MiscFlags = 0;
     bufferDesc.StructureByteStride = 0;
 

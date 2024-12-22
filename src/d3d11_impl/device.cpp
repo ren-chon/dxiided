@@ -851,6 +851,27 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreatePlacedResource(
     D3D12_HEAP_DESC heapDesc;
     pHeap->GetDesc(&heapDesc);
 
+    // For upload heaps, we need to ensure the resource is created with the right CPU access flags
+    if (heapDesc.Properties.Type == D3D12_HEAP_TYPE_UPLOAD) {
+        D3D11_BUFFER_DESC bufferDesc = {};
+        bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
+        bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+        bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | D3D11_BIND_CONSTANT_BUFFER;
+        bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        bufferDesc.MiscFlags = 0;
+        bufferDesc.StructureByteStride = 0;
+
+        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+        HRESULT hr = m_d3d11Device->CreateBuffer(&bufferDesc, nullptr, &buffer);
+        if (FAILED(hr)) {
+            ERR("Failed to create D3D11 buffer for placed resource, hr %#x", hr);
+            return hr;
+        }
+
+        return WrappedD3D12ToD3D11Resource::Create(this, buffer.Get(), pDesc,
+                                   InitialState, riid, ppvResource);
+    }
+
     return WrappedD3D12ToD3D11Resource::Create(this, heap->GetD3D11Buffer(), pDesc,
                                InitialState, riid, ppvResource);
 }
