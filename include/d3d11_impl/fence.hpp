@@ -11,12 +11,12 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11Fence final : public ID3D12Fence {
+class WrappedD3D12ToD3D11Fence final : public ID3D12Fence {
    public:
-    static HRESULT Create(D3D11Device* device, UINT64 initial_value,
-                         D3D12_FENCE_FLAGS flags, REFIID riid, void** fence);
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device, UINT64 InitialValue,
+                         D3D12_FENCE_FLAGS Flags, REFIID riid, void** ppFence);
 
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
@@ -43,9 +43,9 @@ class D3D11Fence final : public ID3D12Fence {
     HRESULT STDMETHODCALLTYPE Signal(UINT64 Value) override;
 
    private:
-    D3D11Fence(D3D11Device* device, UINT64 initial_value, D3D12_FENCE_FLAGS flags);
+    WrappedD3D12ToD3D11Fence(WrappedD3D12ToD3D11Device* device, UINT64 InitialValue, D3D12_FENCE_FLAGS Flags);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     D3D12_FENCE_FLAGS m_flags;
     std::atomic<UINT64> m_value;
     std::atomic<UINT64> m_completed_value;

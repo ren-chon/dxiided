@@ -5,13 +5,13 @@
 namespace dxiided {
 
 // Static member initialization
-std::unordered_map<D3D11ResourceViewCache::ViewKey,
+std::unordered_map<WrappedD3D12ToD3D11ResourceViewCache::ViewKey,
                    Microsoft::WRL::ComPtr<IUnknown>,
-                   D3D11ResourceViewCache::ViewKeyHasher>
-    D3D11ResourceViewCache::s_viewCache;
-std::mutex D3D11ResourceViewCache::s_cacheMutex;
+                   WrappedD3D12ToD3D11ResourceViewCache::ViewKeyHasher>
+    WrappedD3D12ToD3D11ResourceViewCache::s_viewCache;
+std::mutex WrappedD3D12ToD3D11ResourceViewCache::s_cacheMutex;
 
-bool D3D11ResourceViewCache::ViewKey::operator==(const ViewKey& other) const {
+bool WrappedD3D12ToD3D11ResourceViewCache::ViewKey::operator==(const ViewKey& other) const {
     if (resource != other.resource || type != other.type) {
         return false;
     }
@@ -30,7 +30,7 @@ bool D3D11ResourceViewCache::ViewKey::operator==(const ViewKey& other) const {
     }
 }
 
-size_t D3D11ResourceViewCache::ViewKeyHasher::operator()(
+size_t WrappedD3D12ToD3D11ResourceViewCache::ViewKeyHasher::operator()(
     const ViewKey& key) const {
     size_t hash = std::hash<void*>()(key.resource);
     hash = hash * 31 + key.type;
@@ -65,10 +65,10 @@ size_t D3D11ResourceViewCache::ViewKeyHasher::operator()(
 }
 
 Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
-D3D11ResourceViewCache::GetOrCreateSRV(
-    ID3D11Device* device, D3D11Resource* resource,
+WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateSRV(
+    ID3D11Device* device, WrappedD3D12ToD3D11Resource* resource,
     const D3D11_SHADER_RESOURCE_VIEW_DESC* desc) {
-        TRACE("D3D11ResourceViewCache::GetOrCreateSRV called");
+        TRACE("WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateSRV called");
 
     ViewKey key;
     key.resource = resource;
@@ -100,10 +100,10 @@ D3D11ResourceViewCache::GetOrCreateSRV(
 }
 
 Microsoft::WRL::ComPtr<ID3D11RenderTargetView>
-D3D11ResourceViewCache::GetOrCreateRTV(
-    ID3D11Device* device, D3D11Resource* resource,
+WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateRTV(
+    ID3D11Device* device, WrappedD3D12ToD3D11Resource* resource,
     const D3D11_RENDER_TARGET_VIEW_DESC* desc) {
-        TRACE("D3D11ResourceViewCache::GetOrCreateRTV called");
+        TRACE("WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateRTV called");
 
     ViewKey key;
     key.resource = resource;
@@ -135,10 +135,10 @@ D3D11ResourceViewCache::GetOrCreateRTV(
 }
 
 Microsoft::WRL::ComPtr<ID3D11DepthStencilView>
-D3D11ResourceViewCache::GetOrCreateDSV(
-    ID3D11Device* device, D3D11Resource* resource,
+WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateDSV(
+    ID3D11Device* device, WrappedD3D12ToD3D11Resource* resource,
     const D3D11_DEPTH_STENCIL_VIEW_DESC* desc) {
-        TRACE("D3D11ResourceViewCache::GetOrCreateDSV called");
+        TRACE("WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateDSV called");
 
     ViewKey key;
     key.resource = resource;
@@ -170,10 +170,10 @@ D3D11ResourceViewCache::GetOrCreateDSV(
 }
 
 Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView>
-D3D11ResourceViewCache::GetOrCreateUAV(
-    ID3D11Device* device, D3D11Resource* resource,
+WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateUAV(
+    ID3D11Device* device, WrappedD3D12ToD3D11Resource* resource,
     const D3D11_UNORDERED_ACCESS_VIEW_DESC* desc) {
-        TRACE("D3D11ResourceViewCache::GetOrCreateUAV");
+        TRACE("WrappedD3D12ToD3D11ResourceViewCache::GetOrCreateUAV");
     ViewKey key;
     key.resource = resource;
     key.type = 3;

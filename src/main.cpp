@@ -42,7 +42,7 @@ D3D12CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL minimum_feature_level,
     // It's okay for *device to be null, we'll set it ourselves
     *device = nullptr;
     TRACE("  Attempting to create device...");
-    return D3D11Device::Create(adapter, minimum_feature_level, riid, device);
+    return WrappedD3D12ToD3D11Device::Create(adapter, minimum_feature_level, riid, device);
 }
 
 extern "C" HRESULT WINAPI D3D12GetDebugInterface(REFIID riid, void** debug) {

@@ -1,18 +1,17 @@
 #include "d3d11_impl/pipeline_state.hpp"
-
 #include "d3d11_impl/device.hpp"
 
 namespace dxiided {
 
 // Static member initialization
-std::unordered_map<D3D11PipelineState::PipelineStateKey,
-                   Microsoft::WRL::ComPtr<D3D11PipelineState>,
-                   D3D11PipelineState::PipelineStateKeyHasher>
-    D3D11PipelineState::s_pipelineStateCache;
-std::mutex D3D11PipelineState::s_cacheMutex;
+std::unordered_map<WrappedD3D12ToD3D11PipelineState::PipelineStateKey,
+                  Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState>,
+                  WrappedD3D12ToD3D11PipelineState::PipelineStateKeyHasher>
+    WrappedD3D12ToD3D11PipelineState::s_pipelineStateCache;
+std::mutex WrappedD3D12ToD3D11PipelineState::s_cacheMutex;
 
-HRESULT D3D11PipelineState::CreateGraphics(
-    D3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
+HRESULT WrappedD3D12ToD3D11PipelineState::CreateGraphics(
+    WrappedD3D12ToD3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
     TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
@@ -23,7 +22,7 @@ HRESULT D3D11PipelineState::CreateGraphics(
 
     // Try to find cached state
     PipelineStateKey key = ComputeHash(pDesc);
-    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState =
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> cachedState =
         GetCachedState(key);
     if (cachedState) {
         return cachedState.CopyTo(
@@ -31,8 +30,8 @@ HRESULT D3D11PipelineState::CreateGraphics(
     }
 
     // Create new state
-    Microsoft::WRL::ComPtr<D3D11PipelineState> state =
-        new D3D11PipelineState(device);
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> state =
+        new WrappedD3D12ToD3D11PipelineState(device);
     HRESULT hr = state->InitializeGraphics(pDesc);
     if (FAILED(hr)) {
         return hr;
@@ -45,8 +44,8 @@ HRESULT D3D11PipelineState::CreateGraphics(
         reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
 }
 
-HRESULT D3D11PipelineState::CreateCompute(
-    D3D11Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
+HRESULT WrappedD3D12ToD3D11PipelineState::CreateCompute(
+    WrappedD3D12ToD3D11Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
     TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
@@ -57,7 +56,7 @@ HRESULT D3D11PipelineState::CreateCompute(
 
     // Try to find cached state
     PipelineStateKey key = ComputeHash(pDesc);
-    Microsoft::WRL::ComPtr<D3D11PipelineState> cachedState =
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> cachedState =
         GetCachedState(key);
     if (cachedState) {
         return cachedState.CopyTo(
@@ -65,8 +64,8 @@ HRESULT D3D11PipelineState::CreateCompute(
     }
 
     // Create new state
-    Microsoft::WRL::ComPtr<D3D11PipelineState> state =
-        new D3D11PipelineState(device);
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> state =
+        new WrappedD3D12ToD3D11PipelineState(device);
     HRESULT hr = state->InitializeCompute(pDesc);
     if (FAILED(hr)) {
         return hr;
@@ -79,8 +78,8 @@ HRESULT D3D11PipelineState::CreateCompute(
         reinterpret_cast<ID3D12PipelineState**>(ppPipelineState));
 }
 
-Microsoft::WRL::ComPtr<D3D11PipelineState> D3D11PipelineState::GetCachedState(
-    const PipelineStateKey& key) {
+Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState>
+WrappedD3D12ToD3D11PipelineState::GetCachedState(const PipelineStateKey& key) {
     std::lock_guard<std::mutex> lock(s_cacheMutex);
     auto it = s_pipelineStateCache.find(key);
     if (it != s_pipelineStateCache.end()) {
@@ -89,14 +88,15 @@ Microsoft::WRL::ComPtr<D3D11PipelineState> D3D11PipelineState::GetCachedState(
     return nullptr;
 }
 
-void D3D11PipelineState::CacheState(
+void WrappedD3D12ToD3D11PipelineState::CacheState(
     const PipelineStateKey& key,
-    Microsoft::WRL::ComPtr<D3D11PipelineState> state) {
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> state) {
     std::lock_guard<std::mutex> lock(s_cacheMutex);
     s_pipelineStateCache[key] = state;
 }
 
-D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
+WrappedD3D12ToD3D11PipelineState::PipelineStateKey
+WrappedD3D12ToD3D11PipelineState::ComputeHash(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
     PipelineStateKey key;
 
@@ -143,7 +143,8 @@ D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
     return key;
 }
 
-D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
+WrappedD3D12ToD3D11PipelineState::PipelineStateKey
+WrappedD3D12ToD3D11PipelineState::ComputeHash(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc) {
     PipelineStateKey key;
 
@@ -155,11 +156,13 @@ D3D11PipelineState::PipelineStateKey D3D11PipelineState::ComputeHash(
     return key;
 }
 
-D3D11PipelineState::D3D11PipelineState(D3D11Device* device) : m_device(device) {
+WrappedD3D12ToD3D11PipelineState::WrappedD3D12ToD3D11PipelineState(
+    WrappedD3D12ToD3D11Device* device)
+    : m_device(device) {
     TRACE("%p", device);
 }
 
-HRESULT D3D11PipelineState::InitializeGraphics(
+HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
     TRACE("Initializing graphics pipeline state");
 
@@ -358,7 +361,7 @@ HRESULT D3D11PipelineState::InitializeGraphics(
     return S_OK;
 }
 
-HRESULT D3D11PipelineState::CreateStreamOutputShader(
+HRESULT WrappedD3D12ToD3D11PipelineState::CreateStreamOutputShader(
     const D3D12_STREAM_OUTPUT_DESC* pSODesc, const void* pShaderBytecode,
     SIZE_T BytecodeLength) {
     // Convert D3D12 stream output declarations to D3D11
@@ -395,7 +398,7 @@ HRESULT D3D11PipelineState::CreateStreamOutputShader(
         pSODesc->RasterizedStream, nullptr, &m_streamOutShader);
 }
 
-HRESULT D3D11PipelineState::InitializeCompute(
+HRESULT WrappedD3D12ToD3D11PipelineState::InitializeCompute(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc) {
     TRACE("Initializing compute pipeline state");
 
@@ -416,9 +419,10 @@ HRESULT D3D11PipelineState::InitializeCompute(
 }
 
 // IUnknown methods
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::QueryInterface(REFIID riid,
-                                                             void** ppvObject) {
-    TRACE("D3D11PipelineState::QueryInterface %s, %p", debugstr_guid(&riid).c_str(), ppvObject);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::QueryInterface(
+    REFIID riid, void** ppvObject) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::QueryInterface %s, %p",
+          debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
         return E_POINTER;
@@ -434,13 +438,13 @@ HRESULT STDMETHODCALLTYPE D3D11PipelineState::QueryInterface(REFIID riid,
     return E_NOINTERFACE;
 }
 
-ULONG STDMETHODCALLTYPE D3D11PipelineState::AddRef() {
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
     TRACE("%p increasing refcount to %u.", this, ref);
     return ref;
 }
 
-ULONG STDMETHODCALLTYPE D3D11PipelineState::Release() {
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
     TRACE("%p decreasing refcount to %u.", this, ref);
     if (ref == 0) {
@@ -450,46 +454,53 @@ ULONG STDMETHODCALLTYPE D3D11PipelineState::Release() {
 }
 
 // ID3D12Object methods
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetPrivateData(REFGUID guid,
-                                                             UINT* pDataSize,
-                                                             void* pData) {
-    TRACE("D3D11PipelineState::GetPrivateData %s, %p, %p", debugstr_guid(&guid).c_str(), pDataSize, pData);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::GetPrivateData(
+    REFGUID guid, UINT* pDataSize, void* pData) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::GetPrivateData %s, %p, %p",
+          debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_device->GetPrivateData(guid, pDataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateData(
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::SetPrivateData(
     REFGUID guid, UINT DataSize, const void* pData) {
-    TRACE("D3D11PipelineState::SetPrivateData %s, %u, %p", debugstr_guid(&guid).c_str(), DataSize, pData);
+    TRACE("WrappedD3D12ToD3D11PipelineState::SetPrivateData %s, %u, %p",
+          debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_device->SetPrivateData(guid, DataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetPrivateDataInterface(
+HRESULT STDMETHODCALLTYPE
+WrappedD3D12ToD3D11PipelineState::SetPrivateDataInterface(
     REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11PipelineState::SetPrivateDataInterface %s, %p", debugstr_guid(&guid).c_str(), pData);
+    TRACE("WrappedD3D12ToD3D11PipelineState::SetPrivateDataInterface %s, %p",
+          debugstr_guid(&guid).c_str(), pData);
     return m_device->SetPrivateDataInterface(guid, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::SetName(LPCWSTR Name) {
-    TRACE("D3D11PipelineState::SetName %s", debugstr_w(Name).c_str());
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::SetName(
+    LPCWSTR Name) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::SetName %s",
+          debugstr_w(Name).c_str());
     return m_device->SetName(Name);
 }
 
 // ID3D12DeviceChild methods
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetDevice(REFIID riid,
-                                                        void** ppvDevice) {
-    TRACE("D3D11PipelineState::GetDevice %s, %p", debugstr_guid(&riid).c_str(), ppvDevice);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::GetDevice(
+    REFIID riid, void** ppvDevice) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::GetDevice %s, %p",
+          debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12PipelineState methods
-HRESULT STDMETHODCALLTYPE D3D11PipelineState::GetCachedBlob(ID3DBlob** ppBlob) {
-    TRACE("D3D11PipelineState::GetCachedBlob %p", ppBlob);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11PipelineState::GetCachedBlob(
+    ID3DBlob** ppBlob) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::GetCachedBlob %p", ppBlob);
     FIXME("We don't implement pipeline state caching yet");
     return E_NOTIMPL;
 }
 
-void D3D11PipelineState::Apply(ID3D11DeviceContext* context) {
-    TRACE("D3D11PipelineState::Apply");
+void WrappedD3D12ToD3D11PipelineState::Apply(ID3D11DeviceContext* context) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::Apply");
 
     if (m_vertexShader) {
         context->VSSetShader(m_vertexShader.Get(), nullptr, 0);

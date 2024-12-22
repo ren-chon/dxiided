@@ -5,8 +5,8 @@
 
 namespace dxiided {
 
-HRESULT D3D11SwapChain::Create(
-    D3D11Device* device, IDXGIFactory* factory, HWND window,
+HRESULT WrappedD3D12ToD3D11SwapChain::Create(
+    WrappedD3D12ToD3D11Device* device, IDXGIFactory* factory, HWND window,
     const DXGI_SWAP_CHAIN_DESC1* desc,
     const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen_desc, IDXGIOutput* output,
     IDXGISwapChain1** ppSwapChain) {
@@ -125,20 +125,20 @@ HRESULT D3D11SwapChain::Create(
     }
 
     TRACE("Create our wrapper that handles D3D12 interfaces");
-    auto* swapchain = new D3D11SwapChain(device, std::move(swapchain1));
+    auto* swapchain = new WrappedD3D12ToD3D11SwapChain(device, std::move(swapchain1));
     if (!swapchain) {
-        ERR("Failed to allocate D3D11SwapChain wrapper");
+        ERR("Failed to allocate WrappedD3D12ToD3D11SwapChain wrapper");
         return E_OUTOFMEMORY;
     }
 
     *ppSwapChain = swapchain;
-    TRACE("Created D3D11SwapChain wrapper successfully");
+    TRACE("Created WrappedD3D12ToD3D11SwapChain wrapper successfully");
 
     return S_OK;
 }
 
-HRESULT D3D11SwapChain::InitBackBuffers() {
-    TRACE("D3D11SwapChain::InitBackBuffers");
+HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::InitBackBuffers");
 
     // Get swap chain description
     DXGI_SWAP_CHAIN_DESC desc;
@@ -222,8 +222,8 @@ HRESULT D3D11SwapChain::InitBackBuffers() {
     return S_OK;
 }
 
-HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
-    TRACE("D3D11SwapChain::GetBuffer %u, %s, %p", Buffer,
+HRESULT WrappedD3D12ToD3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetBuffer %u, %s, %p", Buffer,
           debugstr_guid(&riid).c_str(), ppSurface);
 
     if (Buffer >= m_buffer_count || !ppSurface) {
@@ -268,7 +268,7 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
         heapProps.VisibleNodeMask = 1;
 
         // Create D3D11Resource wrapper around the back buffer
-        return D3D11Resource::Create(
+        return WrappedD3D12ToD3D11Resource::Create(
             m_device, &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
             D3D12_RESOURCE_STATE_COMMON,
             nullptr,  // No optimized clear value for swap chain
@@ -280,16 +280,16 @@ HRESULT D3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
 }
 
 
-void D3D11SwapChain::ReleaseBackBuffers() {
-    TRACE("D3D11SwapChain::ReleaseBackBuffers");
+void WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers");
     m_backbuffers.clear();
     m_renderTargetViews.clear();
 }
 
-D3D11SwapChain::D3D11SwapChain(
-    D3D11Device* device, Microsoft::WRL::ComPtr<IDXGISwapChain1> base_swapchain)
+WrappedD3D12ToD3D11SwapChain::WrappedD3D12ToD3D11SwapChain(
+    WrappedD3D12ToD3D11Device* device, Microsoft::WRL::ComPtr<IDXGISwapChain1> base_swapchain)
     : m_device(device), m_base_swapchain(std::move(base_swapchain)) {
-    TRACE("D3D11SwapChain::D3D11SwapChain");
+    TRACE("WrappedD3D12ToD3D11SwapChain::WrappedD3D12ToD3D11SwapChain");
 
     // Initialize back buffers
     HRESULT hr = InitBackBuffers();
@@ -298,49 +298,49 @@ D3D11SwapChain::D3D11SwapChain(
     }
 }
 
-D3D11SwapChain::~D3D11SwapChain() {
-    TRACE("D3D11SwapChain::~D3D11SwapChain");
+WrappedD3D12ToD3D11SwapChain::~WrappedD3D12ToD3D11SwapChain() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::~WrappedD3D12ToD3D11SwapChain");
     ReleaseBackBuffers();
 }
 
 // IDXGIObject methods
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::SetPrivateData(REFGUID Name,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::SetPrivateData(REFGUID Name,
                                                          UINT DataSize,
                                                          const void* pData) {
-    TRACE("D3D11SwapChain::SetPrivateData called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::SetPrivateData called");
     return m_base_swapchain->SetPrivateData(Name, DataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::SetPrivateDataInterface(
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::SetPrivateDataInterface(
     REFGUID Name, const IUnknown* pUnknown) {
-    TRACE("D3D11SwapChain::SetPrivateDataInterface called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::SetPrivateDataInterface called");
     return m_base_swapchain->SetPrivateDataInterface(Name, pUnknown);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetPrivateData(REFGUID Name,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetPrivateData(REFGUID Name,
                                                          UINT* pDataSize,
                                                          void* pData) {
-    TRACE("D3D11SwapChain::GetPrivateData called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetPrivateData called");
     return m_base_swapchain->GetPrivateData(Name, pDataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetParent(REFIID riid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetParent(REFIID riid,
                                                     void** ppParent) {
-    TRACE("D3D11SwapChain::GetParent called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetParent called");
     return m_base_swapchain->GetParent(riid, ppParent);
 }
 
 // IDXGIDeviceSubObject methods
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetDevice(REFIID riid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetDevice(REFIID riid,
                                                     void** ppDevice) {
-    TRACE("D3D11SwapChain::GetDevice called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetDevice called");
     return m_base_swapchain->GetDevice(riid, ppDevice);
 }
 
 // IDXGISwapChain methods
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::Present(UINT SyncInterval,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::Present(UINT SyncInterval,
                                                   UINT Flags) {
-    TRACE("D3D11SwapChain::Present called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::Present called");
     static int frame_count = 0;
     frame_count++;
 
@@ -358,28 +358,28 @@ HRESULT STDMETHODCALLTYPE D3D11SwapChain::Present(UINT SyncInterval,
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::SetFullscreenState(BOOL Fullscreen, IDXGIOutput* pTarget) {
-    TRACE("D3D11SwapChain::SetFullscreenState called: Fullscreen=%d, Target=%p",
+WrappedD3D12ToD3D11SwapChain::SetFullscreenState(BOOL Fullscreen, IDXGIOutput* pTarget) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::SetFullscreenState called: Fullscreen=%d, Target=%p",
           Fullscreen, pTarget);
     return m_base_swapchain->SetFullscreenState(Fullscreen, pTarget);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetFullscreenState(BOOL* pFullscreen, IDXGIOutput** ppTarget) {
-    TRACE("D3D11SwapChain::GetFullscreenState called");
+WrappedD3D12ToD3D11SwapChain::GetFullscreenState(BOOL* pFullscreen, IDXGIOutput** ppTarget) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetFullscreenState called");
     return m_base_swapchain->GetFullscreenState(pFullscreen, ppTarget);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetDesc(DXGI_SWAP_CHAIN_DESC* pDesc) {
-    TRACE("D3D11SwapChain::GetDesc called");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetDesc(DXGI_SWAP_CHAIN_DESC* pDesc) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetDesc called");
     return m_base_swapchain->GetDesc(pDesc);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::ResizeBuffers(UINT BufferCount,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::ResizeBuffers(UINT BufferCount,
                                                         UINT Width, UINT Height,
                                                         DXGI_FORMAT NewFormat,
                                                         UINT SwapChainFlags) {
-    TRACE("D3D11SwapChain::ResizeBuffers called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::ResizeBuffers called");
     // Release existing back buffers before resize
     ReleaseBackBuffers();
 
@@ -396,26 +396,26 @@ HRESULT STDMETHODCALLTYPE D3D11SwapChain::ResizeBuffers(UINT BufferCount,
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::ResizeTarget(const DXGI_MODE_DESC* pNewTargetParameters) {
-    TRACE("D3D11SwapChain::ResizeTarget called");
+WrappedD3D12ToD3D11SwapChain::ResizeTarget(const DXGI_MODE_DESC* pNewTargetParameters) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::ResizeTarget called");
     return m_base_swapchain->ResizeTarget(pNewTargetParameters);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetContainingOutput(IDXGIOutput** ppOutput) {
-    TRACE("D3D11SwapChain::GetContainingOutput called");
+WrappedD3D12ToD3D11SwapChain::GetContainingOutput(IDXGIOutput** ppOutput) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetContainingOutput called");
     return m_base_swapchain->GetContainingOutput(ppOutput);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats) {
-    TRACE("D3D11SwapChain::GetFrameStatistics called");
+WrappedD3D12ToD3D11SwapChain::GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetFrameStatistics called");
     return m_base_swapchain->GetFrameStatistics(pStats);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetLastPresentCount(UINT* pLastPresentCount) {
-    TRACE("D3D11SwapChain::GetLastPresentCount called");
+WrappedD3D12ToD3D11SwapChain::GetLastPresentCount(UINT* pLastPresentCount) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetLastPresentCount called");
     return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3),
                                             (void**)&swapchain3) == S_OK
                ? swapchain3->GetLastPresentCount(pLastPresentCount)
@@ -424,75 +424,75 @@ D3D11SwapChain::GetLastPresentCount(UINT* pLastPresentCount) {
 
 // IDXGISwapChain1 methods
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetDesc1(DXGI_SWAP_CHAIN_DESC1* pDesc) {
-    TRACE("D3D11SwapChain::GetDesc1 called");
+WrappedD3D12ToD3D11SwapChain::GetDesc1(DXGI_SWAP_CHAIN_DESC1* pDesc) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetDesc1 called");
     return m_base_swapchain->GetDesc1(pDesc);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pDesc) {
-    TRACE("D3D11SwapChain::GetFullscreenDesc called");
+WrappedD3D12ToD3D11SwapChain::GetFullscreenDesc(DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pDesc) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetFullscreenDesc called");
     return m_base_swapchain->GetFullscreenDesc(pDesc);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetHwnd(HWND* pHwnd) {
-    TRACE("D3D11SwapChain::GetHwnd called");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetHwnd(HWND* pHwnd) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetHwnd called");
     return m_base_swapchain->GetHwnd(pHwnd);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::GetCoreWindow(REFIID refiid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::GetCoreWindow(REFIID refiid,
                                                         void** ppUnk) {
-    TRACE("D3D11SwapChain::GetCoreWindow called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetCoreWindow called");
     return m_base_swapchain->GetCoreWindow(refiid, ppUnk);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::Present1(UINT SyncInterval, UINT PresentFlags,
+WrappedD3D12ToD3D11SwapChain::Present1(UINT SyncInterval, UINT PresentFlags,
                          const DXGI_PRESENT_PARAMETERS* pPresentParameters) {
-    TRACE("D3D11SwapChain::Present1 called");
+    TRACE("WrappedD3D12ToD3D11SwapChain::Present1 called");
     return m_base_swapchain->Present1(SyncInterval, PresentFlags,
                                       pPresentParameters);
 }
 
-BOOL STDMETHODCALLTYPE D3D11SwapChain::IsTemporaryMonoSupported() {
-    TRACE("D3D11SwapChain::IsTemporaryMonoSupported called");
+BOOL STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::IsTemporaryMonoSupported() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::IsTemporaryMonoSupported called");
     return m_base_swapchain->IsTemporaryMonoSupported();
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetRestrictToOutput(IDXGIOutput** ppRestrictToOutput) {
-    TRACE("D3D11SwapChain::GetRestrictToOutput called");
+WrappedD3D12ToD3D11SwapChain::GetRestrictToOutput(IDXGIOutput** ppRestrictToOutput) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetRestrictToOutput called");
     return m_base_swapchain->GetRestrictToOutput(ppRestrictToOutput);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::SetBackgroundColor(const DXGI_RGBA* pColor) {
-    TRACE("D3D11SwapChain::SetBackgroundColor called");
+WrappedD3D12ToD3D11SwapChain::SetBackgroundColor(const DXGI_RGBA* pColor) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::SetBackgroundColor called");
     return m_base_swapchain->SetBackgroundColor(pColor);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetBackgroundColor(DXGI_RGBA* pColor) {
-    TRACE("D3D11SwapChain::GetBackgroundColor called");
+WrappedD3D12ToD3D11SwapChain::GetBackgroundColor(DXGI_RGBA* pColor) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetBackgroundColor called");
     return m_base_swapchain->GetBackgroundColor(pColor);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::SetRotation(DXGI_MODE_ROTATION Rotation) {
-    TRACE("D3D11SwapChain::SetRotation called");
+WrappedD3D12ToD3D11SwapChain::SetRotation(DXGI_MODE_ROTATION Rotation) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::SetRotation called");
     return m_base_swapchain->SetRotation(Rotation);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11SwapChain::GetRotation(DXGI_MODE_ROTATION* pRotation) {
-    TRACE("D3D11SwapChain::GetRotation called");
+WrappedD3D12ToD3D11SwapChain::GetRotation(DXGI_MODE_ROTATION* pRotation) {
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetRotation called");
     return m_base_swapchain->GetRotation(pRotation);
 }
 
 // IUnknown methods
-HRESULT STDMETHODCALLTYPE D3D11SwapChain::QueryInterface(REFIID riid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::QueryInterface(REFIID riid,
                                                          void** ppvObject) {
-    TRACE("D3D11SwapChain::QueryInterface called: %s",
+    TRACE("WrappedD3D12ToD3D11SwapChain::QueryInterface called: %s",
           debugstr_guid(&riid).c_str());
 
     if (!ppvObject) return E_INVALIDARG;
@@ -523,13 +523,13 @@ HRESULT STDMETHODCALLTYPE D3D11SwapChain::QueryInterface(REFIID riid,
     return E_NOINTERFACE;
 }
 
-ULONG STDMETHODCALLTYPE D3D11SwapChain::AddRef() {
-    TRACE("D3D11SwapChain::AddRef called");
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::AddRef() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::AddRef called");
     return InterlockedIncrement(&m_refcount);
 }
 
-ULONG STDMETHODCALLTYPE D3D11SwapChain::Release() {
-    TRACE("D3D11SwapChain::Release called");
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::Release() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::Release called");
     ULONG refcount = InterlockedDecrement(&m_refcount);
     if (refcount == 0) {
         delete this;

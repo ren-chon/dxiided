@@ -11,11 +11,11 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11CommandList final : public ID3D12GraphicsCommandList {
+class WrappedD3D12ToD3D11CommandList final : public ID3D12GraphicsCommandList {
    public:
-    static HRESULT Create(D3D11Device* device, D3D12_COMMAND_LIST_TYPE type,
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device, D3D12_COMMAND_LIST_TYPE type,
                           ID3D12CommandAllocator* allocator,
                           ID3D12PipelineState* initial_state, REFIID riid,
                           void** command_list);
@@ -238,10 +238,12 @@ class D3D11CommandList final : public ID3D12GraphicsCommandList {
         ID3D12Resource* pCountBuffer, UINT64 CountBufferOffset) override;
 
    private:
-    D3D11CommandList(D3D11Device* device, D3D12_COMMAND_LIST_TYPE type,
+    WrappedD3D12ToD3D11CommandList(
+        WrappedD3D12ToD3D11Device* device,
+        D3D12_COMMAND_LIST_TYPE type,
                      Microsoft::WRL::ComPtr<ID3D11DeviceContext> context);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     D3D12_COMMAND_LIST_TYPE m_type;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
     LONG m_refCount{1};

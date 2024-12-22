@@ -3,13 +3,14 @@
 
 namespace dxiided {
 
-HRESULT D3D11Heap::Create(D3D11Device* device, const D3D12_HEAP_DESC& desc,
+HRESULT WrappedD3D12ToD3D11Heap::Create(WrappedD3D12ToD3D11Device* device, const D3D12_HEAP_DESC& desc,
                          REFIID riid, void** ppvHeap) {
     if (!device || !ppvHeap) {
         return E_INVALIDARG;
     }
 
-    auto* heap = new D3D11Heap(device, desc);
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Heap> heap(
+        new WrappedD3D12ToD3D11Heap(device, desc));
     if (!heap) {
         return E_OUTOFMEMORY;
     }
@@ -17,9 +18,9 @@ HRESULT D3D11Heap::Create(D3D11Device* device, const D3D12_HEAP_DESC& desc,
     return heap->QueryInterface(riid, ppvHeap);
 }
 
-D3D11Heap::D3D11Heap(D3D11Device* device, const D3D12_HEAP_DESC& desc)
+WrappedD3D12ToD3D11Heap::WrappedD3D12ToD3D11Heap(WrappedD3D12ToD3D11Device* device, const D3D12_HEAP_DESC& desc)
     : m_device(device), m_desc(desc) {
-    TRACE("D3D11Heap::D3D11Heap(%p, %p)", device, &desc);
+    TRACE("WrappedD3D12ToD3D11Heap::WrappedD3D12ToD3D11Heap(%p, %p)", device, &desc);
     TRACE(" SizeInBytes: %llu", desc.SizeInBytes);
     TRACE(" Properties.Type: %d", desc.Properties.Type);
     TRACE(" Properties.CPUPageProperty: %d", desc.Properties.CPUPageProperty);
@@ -43,8 +44,8 @@ D3D11Heap::D3D11Heap(D3D11Device* device, const D3D12_HEAP_DESC& desc)
 }
 
 // IUnknown methods
-HRESULT STDMETHODCALLTYPE D3D11Heap::QueryInterface(REFIID riid, void** ppvObject) {
-    TRACE("D3D11Heap::QueryInterface(%s, %p)", debugstr_guid(&riid).c_str(), ppvObject);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::QueryInterface(REFIID riid, void** ppvObject) {
+    TRACE("WrappedD3D12ToD3D11Heap::QueryInterface(%s, %p)", debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
         return E_POINTER;
@@ -63,13 +64,13 @@ HRESULT STDMETHODCALLTYPE D3D11Heap::QueryInterface(REFIID riid, void** ppvObjec
     return E_NOINTERFACE;
 }
 
-ULONG STDMETHODCALLTYPE D3D11Heap::AddRef() {
-    TRACE("D3D11Heap::AddRef()");
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::AddRef() {
+    TRACE("WrappedD3D12ToD3D11Heap::AddRef()");
     return InterlockedIncrement(&m_refCount);
 }
 
-ULONG STDMETHODCALLTYPE D3D11Heap::Release() {
-    TRACE("D3D11Heap::Release()");
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::Release() {
+    TRACE("WrappedD3D12ToD3D11Heap::Release()");
     ULONG ref = InterlockedDecrement(&m_refCount);
     if (ref == 0) {
         delete this;
@@ -78,39 +79,39 @@ ULONG STDMETHODCALLTYPE D3D11Heap::Release() {
 }
 
 // ID3D12Object methods
-HRESULT STDMETHODCALLTYPE D3D11Heap::GetPrivateData(REFGUID guid, UINT* pDataSize, void* pData) {
-    TRACE("D3D11Heap::GetPrivateData(%s, %p, %p)", debugstr_guid(&guid).c_str(), pDataSize, pData);
-    FIXME("D3D11Heap::GetPrivateData not implemented");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::GetPrivateData(REFGUID guid, UINT* pDataSize, void* pData) {
+    TRACE("WrappedD3D12ToD3D11Heap::GetPrivateData(%s, %p, %p)", debugstr_guid(&guid).c_str(), pDataSize, pData);
+    FIXME("WrappedD3D12ToD3D11Heap::GetPrivateData not implemented");
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Heap::SetPrivateData(REFGUID guid, UINT DataSize, const void* pData) {
-    TRACE("D3D11Heap::SetPrivateData(%s, %u, %p)", debugstr_guid(&guid).c_str(), DataSize, pData);
-    FIXME("D3D11Heap::SetPrivateData not implemented");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::SetPrivateData(REFGUID guid, UINT DataSize, const void* pData) {
+    TRACE("WrappedD3D12ToD3D11Heap::SetPrivateData(%s, %u, %p)", debugstr_guid(&guid).c_str(), DataSize, pData);
+    FIXME("WrappedD3D12ToD3D11Heap::SetPrivateData not implemented");
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Heap::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11Heap::SetPrivateDataInterface(%s, %p)", debugstr_guid(&guid).c_str(), pData);
-    FIXME("D3D11Heap::SetPrivateDataInterface not implemented");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
+    TRACE("WrappedD3D12ToD3D11Heap::SetPrivateDataInterface(%s, %p)", debugstr_guid(&guid).c_str(), pData);
+    FIXME("WrappedD3D12ToD3D11Heap::SetPrivateDataInterface not implemented");
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Heap::SetName(LPCWSTR Name) {
-    TRACE("D3D11Heap::SetName(%ls)", Name);
-    FIXME("D3D11Heap::SetName not implemented");
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::SetName(LPCWSTR Name) {
+    TRACE("WrappedD3D12ToD3D11Heap::SetName(%ls)", Name);
+    FIXME("WrappedD3D12ToD3D11Heap::SetName not implemented");
     return E_NOTIMPL;
 }
 
 // ID3D12DeviceChild methods
-HRESULT STDMETHODCALLTYPE D3D11Heap::GetDevice(REFIID riid, void** ppvDevice) {
-    TRACE("D3D11Heap::GetDevice(%s, %p)", debugstr_guid(&riid).c_str(), ppvDevice);
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::GetDevice(REFIID riid, void** ppvDevice) {
+    TRACE("WrappedD3D12ToD3D11Heap::GetDevice(%s, %p)", debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12Heap methods
-D3D12_HEAP_DESC* STDMETHODCALLTYPE D3D11Heap::GetDesc(D3D12_HEAP_DESC* desc) {
-    TRACE("D3D11Heap::GetDesc(%p)", desc);
+D3D12_HEAP_DESC* STDMETHODCALLTYPE WrappedD3D12ToD3D11Heap::GetDesc(D3D12_HEAP_DESC* desc) {
+    TRACE("WrappedD3D12ToD3D11Heap::GetDesc(%p)", desc);
     *desc = m_desc;
     return desc;
 }

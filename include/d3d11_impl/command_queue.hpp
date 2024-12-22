@@ -15,8 +15,8 @@
 
 namespace dxiided {
 
-class D3D11Device;
-class D3D11CommandList;
+class WrappedD3D12ToD3D11Device;
+class WrappedD3D12ToD3D11CommandList;
 
 // Define the IWineDXGISwapChainFactory interface GUID
 DEFINE_GUID(IID_IWineDXGISwapChainFactory,
@@ -35,11 +35,11 @@ interface IWineDXGISwapChainFactory : IUnknown {
 };
 
 
-class D3D11CommandQueue final : public ID3D12CommandQueue,
+class WrappedD3D12ToD3D11CommandQueue final : public ID3D12CommandQueue,
                                public IWineDXGISwapChainFactory
                                {
    public:
-    static HRESULT Create(D3D11Device* device,
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device,
                           const D3D12_COMMAND_QUEUE_DESC* desc, REFIID riid,
                           void** command_queue);
 
@@ -105,10 +105,10 @@ class D3D11CommandQueue final : public ID3D12CommandQueue,
 
 
    private:
-    D3D11CommandQueue(D3D11Device* device,
+    WrappedD3D12ToD3D11CommandQueue(WrappedD3D12ToD3D11Device* device,
                       const D3D12_COMMAND_QUEUE_DESC* desc);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     D3D12_COMMAND_QUEUE_DESC m_desc;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> m_context;
     LONG m_refCount = 1;

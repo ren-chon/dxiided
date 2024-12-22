@@ -6,11 +6,11 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11Heap final : public ID3D12Heap {
+class WrappedD3D12ToD3D11Heap final : public ID3D12Heap {
 public:
-    static HRESULT Create(D3D11Device* device, const D3D12_HEAP_DESC& desc,
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device, const D3D12_HEAP_DESC& desc,
                          REFIID riid, void** ppvHeap);
 
     // IUnknown methods
@@ -30,13 +30,13 @@ public:
     // ID3D12Heap methods
     D3D12_HEAP_DESC* STDMETHODCALLTYPE GetDesc(D3D12_HEAP_DESC* desc) override;
 
-    // D3D11Heap methods
+    // WrappedD3D12ToD3D11Heap methods
     ID3D11Buffer* GetD3D11Buffer() { return m_buffer.Get(); }
 
 private:
-    D3D11Heap(D3D11Device* device, const D3D12_HEAP_DESC& desc);
+    WrappedD3D12ToD3D11Heap(WrappedD3D12ToD3D11Device* device, const D3D12_HEAP_DESC& desc);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     D3D12_HEAP_DESC m_desc;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_buffer;
     LONG m_refCount = 1;

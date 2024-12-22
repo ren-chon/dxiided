@@ -12,13 +12,16 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11DescriptorHeap final : public ID3D12DescriptorHeap {
+class WrappedD3D12ToD3D11DescriptorHeap final : public ID3D12DescriptorHeap {
 public:
-    static HRESULT Create(D3D11Device* device,
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device,
                          const D3D12_DESCRIPTOR_HEAP_DESC* desc,
                          REFIID riid, void** ppvHeap);
+
+    WrappedD3D12ToD3D11DescriptorHeap(WrappedD3D12ToD3D11Device* device,
+                        const D3D12_DESCRIPTOR_HEAP_DESC* desc);
 
     // IUnknown methods
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid,
@@ -47,10 +50,7 @@ public:
         D3D12_GPU_DESCRIPTOR_HANDLE* handle) override;
 
 private:
-    D3D11DescriptorHeap(D3D11Device* device,
-                        const D3D12_DESCRIPTOR_HEAP_DESC* desc);
-
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     D3D12_DESCRIPTOR_HEAP_DESC m_desc;
     std::atomic<ULONG> m_refCount{1};
 

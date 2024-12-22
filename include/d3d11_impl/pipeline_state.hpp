@@ -13,15 +13,15 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11PipelineState final : public ID3D12PipelineState {
+class WrappedD3D12ToD3D11PipelineState final : public ID3D12PipelineState {
    public:
     static HRESULT CreateGraphics(
-        D3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
+        WrappedD3D12ToD3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
         REFIID riid, void** ppPipelineState);
 
-    static HRESULT CreateCompute(D3D11Device* device,
+    static HRESULT CreateCompute(WrappedD3D12ToD3D11Device* device,
                                  const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
                                  REFIID riid, void** ppPipelineState);
 
@@ -65,18 +65,18 @@ class D3D11PipelineState final : public ID3D12PipelineState {
         }
     };
 
-    static Microsoft::WRL::ComPtr<D3D11PipelineState> GetCachedState(
+    static Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> GetCachedState(
         const PipelineStateKey& key);
     static void CacheState(const PipelineStateKey& key,
-                           Microsoft::WRL::ComPtr<D3D11PipelineState> state);
+                           Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> state);
 
    private:
-    D3D11PipelineState(D3D11Device* device);
+    WrappedD3D12ToD3D11PipelineState(WrappedD3D12ToD3D11Device* device);
 
     HRESULT InitializeGraphics(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc);
     HRESULT InitializeCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* const m_device;
     LONG m_refCount{1};
 
     // Graphics pipeline state
@@ -111,7 +111,7 @@ class D3D11PipelineState final : public ID3D12PipelineState {
         const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc);
 
     static std::unordered_map<PipelineStateKey,
-                              Microsoft::WRL::ComPtr<D3D11PipelineState>,
+                              Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState>,
                               PipelineStateKeyHasher>
         s_pipelineStateCache;
     static std::mutex s_cacheMutex;

@@ -15,11 +15,10 @@
 
 namespace dxiided {
 
-class D3D11CommandList;
-class D3D11CommandQueue;
+class WrappedD3D12ToD3D11CommandList;
+class WrappedD3D12ToD3D11CommandQueue;
 
-// We need to inherit from both D3D11 and D3D12 interfaces
-class D3D11Device final : public ID3D12Device2,
+class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
                          public ID3D12DebugDevice,
                          public ID3D11Device2 {
    public:
@@ -317,7 +316,7 @@ class D3D11Device final : public ID3D12Device2,
     ID3D11DeviceContext* GetD3D11Context() { return m_d3d11Context.Get(); }
 
    private:
-    D3D11Device(Microsoft::WRL::ComPtr<ID3D11Device> device,
+    WrappedD3D12ToD3D11Device(Microsoft::WRL::ComPtr<ID3D11Device> device,
                 Microsoft::WRL::ComPtr<ID3D11DeviceContext> context,
                 D3D_FEATURE_LEVEL feature_level);
 
@@ -332,7 +331,7 @@ class D3D11Device final : public ID3D12Device2,
     // Resource tracking
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<ID3D11Resource>>
         m_resourceMap;
-    std::vector<std::unique_ptr<D3D11CommandQueue>> m_commandQueues;
+    std::vector<std::unique_ptr<WrappedD3D12ToD3D11CommandQueue>> m_commandQueues;
 
     // Helper to get D3D11 resource from D3D12 resource using private data
     ID3D11Resource* GetD3D11Resource(ID3D12Resource* d3d12Resource);

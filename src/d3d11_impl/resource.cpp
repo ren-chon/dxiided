@@ -4,7 +4,7 @@
 
 namespace dxiided {
 
-HRESULT D3D11Resource::Create(D3D11Device* device,
+HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
                               const D3D12_HEAP_PROPERTIES* pHeapProperties,
                               D3D12_HEAP_FLAGS HeapFlags,
                               const D3D12_RESOURCE_DESC* pDesc,
@@ -12,7 +12,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
                               const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                               REFIID riid, void** ppvResource) {
     TRACE(
-        "D3D11Resource::Create called with: %p, %p, %#x, %p, %#x, %p, %s, %p",
+        "WrappedD3D12ToD3D11Resource::Create called with: %p, %p, %#x, %p, %#x, %p, %s, %p",
         device, pHeapProperties, HeapFlags, pDesc, InitialState,
         pOptimizedClearValue, debugstr_guid(&riid).c_str(), ppvResource);
 
@@ -21,7 +21,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         return E_INVALIDARG;
     }
 
-    Microsoft::WRL::ComPtr<D3D11Resource> resource = new D3D11Resource(
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> resource = new WrappedD3D12ToD3D11Resource(
         device, pHeapProperties, HeapFlags, pDesc, InitialState);
 
     if (!resource->GetD3D11Resource()) {
@@ -32,7 +32,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
     return resource.CopyTo(reinterpret_cast<ID3D12Resource**>(ppvResource));
 }
 
-HRESULT D3D11Resource::Create(D3D11Device* device,
+HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
                              ID3D11Resource* resource,
                              const D3D12_RESOURCE_DESC* pDesc,
                              D3D12_RESOURCE_STATES InitialState,
@@ -43,7 +43,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
         return E_INVALIDARG;
     }
 
-    Microsoft::WRL::ComPtr<D3D11Resource> wrapper = new D3D11Resource(
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> wrapper = new WrappedD3D12ToD3D11Resource(
         device, resource, pDesc, InitialState);
 
     if (!wrapper->GetD3D11Resource()) {
@@ -54,7 +54,7 @@ HRESULT D3D11Resource::Create(D3D11Device* device,
     return wrapper.CopyTo(reinterpret_cast<ID3D12Resource**>(ppvResource));
 }
 
-D3D11Resource::D3D11Resource(D3D11Device* device,
+WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
                              const D3D12_HEAP_PROPERTIES* pHeapProperties,
                              D3D12_HEAP_FLAGS HeapFlags,
                              const D3D12_RESOURCE_DESC* pDesc,
@@ -185,7 +185,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
     }
 }
 
-D3D11Resource::D3D11Resource(D3D11Device* device,
+WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
                             ID3D11Resource* resource,
                             const D3D12_RESOURCE_DESC* pDesc,
                             D3D12_RESOURCE_STATES InitialState)
@@ -199,7 +199,7 @@ D3D11Resource::D3D11Resource(D3D11Device* device,
     }
 }
 
-void D3D11Resource::StoreInDeviceMap() {
+void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
     if (m_device && m_resource) {
         // Store the mapping between D3D12 and D3D11 resources in the device
         Microsoft::WRL::ComPtr<ID3D11Device> d3d11Device;
@@ -222,7 +222,7 @@ void D3D11Resource::StoreInDeviceMap() {
     }
 }
 
-UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
+UINT WrappedD3D12ToD3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
     TRACE("GetMiscFlags called");
     TRACE("  Alignment: %llu", pDesc->Alignment);
     TRACE("  Dimension: %x", pDesc->Dimension);
@@ -258,9 +258,9 @@ UINT D3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
     return flags;
 }
 
-void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
+void WrappedD3D12ToD3D11Resource::TransitionTo(ID3D11DeviceContext* context,
                                  D3D12_RESOURCE_STATES newState) {
-    TRACE("D3D11Resource::TransitionTo %p, %#x -> %#x", context,
+    TRACE("WrappedD3D12ToD3D11Resource::TransitionTo %p, %#x -> %#x", context,
           m_currentState, newState);
 
     // No need to transition if states are the same
@@ -297,8 +297,8 @@ void D3D11Resource::TransitionTo(ID3D11DeviceContext* context,
     m_currentState = newState;
 }
 
-void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
-    TRACE("D3D11Resource::UAVBarrier %p", context);
+void WrappedD3D12ToD3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
+    TRACE("WrappedD3D12ToD3D11Resource::UAVBarrier %p", context);
 
     if (m_isUAV) {
         // Ensure UAV writes are completed
@@ -307,17 +307,17 @@ void D3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
     }
 }
 
-void D3D11Resource::AliasingBarrier(ID3D11DeviceContext* context,
-                                    D3D11Resource* pResourceAfter) {
-    TRACE("D3D11Resource::AliasingBarrier %p, %p", context, pResourceAfter);
+void WrappedD3D12ToD3D11Resource::AliasingBarrier(ID3D11DeviceContext* context,
+                                    WrappedD3D12ToD3D11Resource* pResourceAfter) {
+    TRACE("WrappedD3D12ToD3D11Resource::AliasingBarrier %p, %p", context, pResourceAfter);
 
     // Ensure all operations on both resources are completed
     context->Flush();
 }
 
-D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
+D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
     const D3D12_RESOURCE_DESC* pDesc) {
-    TRACE("D3D11Resource::GetD3D11BindFlags called");
+    TRACE("WrappedD3D12ToD3D11Resource::GetD3D11BindFlags called");
     D3D11_BIND_FLAG flags = static_cast<D3D11_BIND_FLAG>(0);
 
     // For swap chain buffers, we need both RT and SRV capabilities
@@ -352,8 +352,8 @@ D3D11_BIND_FLAG D3D11Resource::GetD3D11BindFlags(
     return flags;
 }
 
-DXGI_FORMAT D3D11Resource::GetViewFormat(DXGI_FORMAT format) {
-    TRACE("D3D11Resource::GetViewFormat called with %d", format);
+DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
+    TRACE("WrappedD3D12ToD3D11Resource::GetViewFormat called with %d", format);
     switch (format) {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
             return DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -382,9 +382,9 @@ DXGI_FORMAT D3D11Resource::GetViewFormat(DXGI_FORMAT format) {
     }
 }
 
-D3D11_USAGE D3D11Resource::GetD3D11Usage(
+D3D11_USAGE WrappedD3D12ToD3D11Resource::GetD3D11Usage(
     const D3D12_HEAP_PROPERTIES* pHeapProperties) {
-    TRACE("D3D11Resource::GetD3D11Usage called");
+    TRACE("WrappedD3D12ToD3D11Resource::GetD3D11Usage called");
     switch (pHeapProperties->Type) {
         case D3D12_HEAP_TYPE_DEFAULT:
             return D3D11_USAGE_DEFAULT;
@@ -408,9 +408,9 @@ D3D11_USAGE D3D11Resource::GetD3D11Usage(
 }
 
 // IUnknown methods
-HRESULT STDMETHODCALLTYPE D3D11Resource::QueryInterface(REFIID riid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid,
                                                         void** ppvObject) {
-    TRACE("D3D11Resource::QueryInterface called: %s, %p",
+    TRACE("WrappedD3D12ToD3D11Resource::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
     if (!ppvObject) {
@@ -418,7 +418,7 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::QueryInterface(REFIID riid,
     }
 
     if (riid == __uuidof(ID3D12Resource) || riid == __uuidof(IUnknown)) {
-        TRACE("D3D11Resource::QueryInterface returning ID3D12Resource");
+        TRACE("WrappedD3D12ToD3D11Resource::QueryInterface returning ID3D12Resource");
         AddRef();
         *ppvObject = this;
         return S_OK;
@@ -428,13 +428,13 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::QueryInterface(REFIID riid,
     return E_NOINTERFACE;
 }
 
-ULONG STDMETHODCALLTYPE D3D11Resource::AddRef() {
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
     TRACE("%p increasing refcount to %u.", this, ref);
     return ref;
 }
 
-ULONG STDMETHODCALLTYPE D3D11Resource::Release() {
+ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
     TRACE("%p decreasing refcount to %u.", this, ref);
     if (ref == 0) {
@@ -444,49 +444,49 @@ ULONG STDMETHODCALLTYPE D3D11Resource::Release() {
 }
 
 // ID3D12Object methods
-HRESULT STDMETHODCALLTYPE D3D11Resource::GetPrivateData(REFGUID guid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetPrivateData(REFGUID guid,
                                                         UINT* pDataSize,
                                                         void* pData) {
-    TRACE("D3D11Resource::GetPrivateData called: %s, %p, %p",
+    TRACE("WrappedD3D12ToD3D11Resource::GetPrivateData called: %s, %p, %p",
           debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_resource->GetPrivateData(guid, pDataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::SetPrivateData(REFGUID guid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID guid,
                                                         UINT DataSize,
                                                         const void* pData) {
-    TRACE("D3D11Resource::SetPrivateData %s, %u, %p",
+    TRACE("WrappedD3D12ToD3D11Resource::SetPrivateData %s, %u, %p",
           debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_resource->SetPrivateData(guid, DataSize, pData);
 }
 
 HRESULT STDMETHODCALLTYPE
-D3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
-    TRACE("D3D11Resource::SetPrivateDataInterface %s, %p",
+WrappedD3D12ToD3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
+    TRACE("WrappedD3D12ToD3D11Resource::SetPrivateDataInterface %s, %p",
           debugstr_guid(&guid).c_str(), pData);
     return m_resource->SetPrivateDataInterface(guid, pData);
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::SetName(LPCWSTR Name) {
-    TRACE("D3D11Resource::SetName %s", debugstr_w(Name).c_str());
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetName(LPCWSTR Name) {
+    TRACE("WrappedD3D12ToD3D11Resource::SetName %s", debugstr_w(Name).c_str());
     return m_resource->SetPrivateData(
         WKPDID_D3DDebugObjectName,
         static_cast<UINT>((wcslen(Name) + 1) * sizeof(WCHAR)), Name);
 }
 
 // ID3D12DeviceChild methods
-HRESULT STDMETHODCALLTYPE D3D11Resource::GetDevice(REFIID riid,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid,
                                                    void** ppvDevice) {
-    TRACE("D3D11Resource::GetDevice %s, %p", debugstr_guid(&riid).c_str(),
+    TRACE("WrappedD3D12ToD3D11Resource::GetDevice %s, %p", debugstr_guid(&riid).c_str(),
           ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12Resource methods
-HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
                                              const D3D12_RANGE* pReadRange,
                                              void** ppData) {
-    TRACE("D3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
+    TRACE("WrappedD3D12ToD3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
 
     // For ring buffers, use NO_OVERWRITE to preserve existing data
     D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -505,15 +505,15 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::Map(UINT Subresource,
     return hr;
 }
 
-void STDMETHODCALLTYPE D3D11Resource::Unmap(UINT Subresource,
+void STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Unmap(UINT Subresource,
                                             const D3D12_RANGE* pWrittenRange) {
-    TRACE("D3D11Resource::Unmap %u, %p", Subresource, pWrittenRange);
+    TRACE("WrappedD3D12ToD3D11Resource::Unmap %u, %p", Subresource, pWrittenRange);
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
-D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
+D3D12_RESOURCE_DESC* STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
     if (pDesc) {
-        TRACE("D3D11Resource::GetDesc(%p)", pDesc);
+        TRACE("WrappedD3D12ToD3D11Resource::GetDesc(%p)", pDesc);
         TRACE("  Dimension: %d", m_desc.Dimension);
         TRACE("  Alignment: %llu", m_desc.Alignment);
         TRACE("  Width: %llu", m_desc.Width);
@@ -530,15 +530,15 @@ D3D12_RESOURCE_DESC* STDMETHODCALLTYPE D3D11Resource::GetDesc(D3D12_RESOURCE_DES
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
-D3D11Resource::GetGPUVirtualAddress() {
-    TRACE("D3D11Resource::GetGPUVirtualAddress called");
+WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
+    TRACE("WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress called");
     return m_gpuAddress;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::WriteToSubresource(
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::WriteToSubresource(
     UINT DstSubresource, const D3D12_BOX* pDstBox, const void* pSrcData,
     UINT SrcRowPitch, UINT SrcDepthPitch) {
-    TRACE("D3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u",
+    TRACE("WrappedD3D12ToD3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u",
           DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch);
 
     m_device->GetD3D11Context()->UpdateSubresource(
@@ -549,10 +549,10 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::WriteToSubresource(
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::ReadFromSubresource(
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::ReadFromSubresource(
     void* pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource,
     const D3D12_BOX* pSrcBox) {
-    TRACE("D3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p", pDstData,
+    TRACE("WrappedD3D12ToD3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p", pDstData,
           DstRowPitch, DstDepthPitch, SrcSubresource, pSrcBox);
 
     // D3D11 doesn't have a direct equivalent for reading from a subresource
@@ -561,9 +561,9 @@ HRESULT STDMETHODCALLTYPE D3D11Resource::ReadFromSubresource(
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE D3D11Resource::GetHeapProperties(
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetHeapProperties(
     D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS* pHeapFlags) {
-    TRACE("D3D11Resource::GetHeapProperties %p, %p", pHeapProperties,
+    TRACE("WrappedD3D12ToD3D11Resource::GetHeapProperties %p, %p", pHeapProperties,
           pHeapFlags);
 
     if (pHeapProperties) {

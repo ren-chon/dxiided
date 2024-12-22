@@ -11,11 +11,11 @@
 
 namespace dxiided {
 
-class D3D11Device;
+class WrappedD3D12ToD3D11Device;
 
-class D3D11Resource final : public ID3D12Resource {
+class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
    public:
-    static HRESULT Create(D3D11Device* device,
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device,
                           const D3D12_HEAP_PROPERTIES* pHeapProperties,
                           D3D12_HEAP_FLAGS HeapFlags,
                           const D3D12_RESOURCE_DESC* pDesc,
@@ -23,8 +23,8 @@ class D3D11Resource final : public ID3D12Resource {
                           const D3D12_CLEAR_VALUE* pOptimizedClearValue,
                           REFIID riid, void** ppvResource);
 
-    // Create a D3D11Resource wrapper around an existing D3D11 resource
-    static HRESULT Create(D3D11Device* device,
+    // Create a WrappedD3D12ToD3D11Resource wrapper around an existing D3D11 resource
+    static HRESULT Create(WrappedD3D12ToD3D11Device* device,
                          ID3D11Resource* resource,
                          const D3D12_RESOURCE_DESC* pDesc,
                          D3D12_RESOURCE_STATES InitialState,
@@ -74,7 +74,7 @@ class D3D11Resource final : public ID3D12Resource {
                       D3D12_RESOURCE_STATES newState);
     void UAVBarrier(ID3D11DeviceContext* context);
     void AliasingBarrier(ID3D11DeviceContext* context,
-                         D3D11Resource* pResourceAfter);
+                         WrappedD3D12ToD3D11Resource* pResourceAfter);
 
     // Helper methods
     ID3D11Resource* GetD3D11Resource() const { return m_resource.Get(); }
@@ -82,22 +82,24 @@ class D3D11Resource final : public ID3D12Resource {
     void StoreInDeviceMap();
 
    private:
-    D3D11Resource(D3D11Device* device,
-                  const D3D12_HEAP_PROPERTIES* pHeapProperties,
-                  D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC* pDesc,
-                  D3D12_RESOURCE_STATES InitialState);
+    WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
+                                const D3D12_HEAP_PROPERTIES* pHeapProperties,
+                                D3D12_HEAP_FLAGS HeapFlags,
+                                const D3D12_RESOURCE_DESC* pDesc,
+                                D3D12_RESOURCE_STATES InitialState);
 
     // Constructor for wrapping existing D3D11 resource
-    D3D11Resource(D3D11Device* device, ID3D11Resource* resource,
-                  const D3D12_RESOURCE_DESC* pDesc,
-                  D3D12_RESOURCE_STATES InitialState);
+    WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
+                                ID3D11Resource* resource,
+                                const D3D12_RESOURCE_DESC* pDesc,
+                                D3D12_RESOURCE_STATES InitialState);
 
     static D3D11_BIND_FLAG GetD3D11BindFlags(const D3D12_RESOURCE_DESC* pDesc);
     static DXGI_FORMAT GetViewFormat(DXGI_FORMAT format);
     static D3D11_USAGE GetD3D11Usage(
         const D3D12_HEAP_PROPERTIES* pHeapProperties);
 
-    D3D11Device* m_device;
+    WrappedD3D12ToD3D11Device* m_device;
     Microsoft::WRL::ComPtr<ID3D11Resource> m_resource;
     D3D12_RESOURCE_DESC m_desc;
     D3D12_HEAP_PROPERTIES m_heapProperties;
