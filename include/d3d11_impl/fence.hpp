@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <map>
 #include <vector>
 #include "common/debug.hpp"
 
@@ -49,9 +50,9 @@ class WrappedD3D12ToD3D11Fence final : public ID3D12Fence {
     D3D12_FENCE_FLAGS m_flags;
     std::atomic<UINT64> m_value;
     std::atomic<UINT64> m_completed_value;
+    std::atomic<ULONG> m_ref_count{1};
     std::mutex m_mutex;
-    std::vector<std::pair<UINT64, HANDLE>> m_pendingEvents;
-    std::atomic<ULONG> m_refCount{1};
+    std::map<UINT64, HANDLE> m_pendingEvents;
 };
 
 }  // namespace dxiided

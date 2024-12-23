@@ -51,18 +51,20 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::QueryInterface(REFIID riid,
 }
 
 ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::AddRef() {
-    ULONG refCount = ++m_refCount;
-    TRACE("WrappedD3D12ToD3D11Fence::AddRef %p increasing refcount to %lu.", this, refCount);
-    return refCount;
+    TRACE("WrappedD3D12ToD3D11Fence::AddRef");
+    return m_ref_count.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
 ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::Release() {
-    ULONG refCount = --m_refCount;
-    TRACE("WrappedD3D12ToD3D11Fence::Release %p decreasing refcount to %lu.", this, refCount);
-    if (refCount == 0) {
+    TRACE("WrappedD3D12ToD3D11Fence::Release");
+    ULONG ref = m_ref_count.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (ref == 0) {
+        // Clear any pending events before destruction
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_pendingEvents.clear();
         delete this;
     }
-    return refCount;
+    return ref;
 }
 
 // ID3D12Object methods
@@ -106,17 +108,24 @@ UINT64 STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::GetCompletedValue() {
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::SetEventOnCompletion(UINT64 Value,
                                                           HANDLE hEvent) {
-                                                            TRACE("WrappedD3D12ToD3D11Fence::SetEventOnCompletion %llu, %p", Value, hEvent);
+    TRACE("WrappedD3D12ToD3D11Fence::SetEventOnCompletion %llu, %p", Value, hEvent);
+    if (hEvent == nullptr || hEvent == INVALID_HANDLE_VALUE) {
+        return E_INVALIDARG;
+    }
+
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_completed_value >= Value) {
-        if (hEvent) {
-            SetEvent(hEvent);
+    
+    // If the value has already been reached, signal immediately
+    if (Value <= m_completed_value.load(std::memory_order_acquire)) {
+        if (!SetEvent(hEvent)) {
+            TRACE("  Failed to signal event %p for value %llu", hEvent, Value);
+            return E_FAIL;
         }
         return S_OK;
     }
 
-    // Store event for later completion
-    m_pendingEvents.push_back({Value, hEvent});
+    // Otherwise store for later signaling
+    m_pendingEvents[Value] = hEvent;
     return S_OK;
 }
 
@@ -124,28 +133,39 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::Signal(UINT64 Value) {
     TRACE("WrappedD3D12ToD3D11Fence::Signal %llu", Value);
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    // Update the fence value
+    // Update the fence value atomically
+    UINT64 oldValue = m_value.load(std::memory_order_acquire);
     m_value.store(Value, std::memory_order_release);
     
-    // Update completed value and process pending events
-    if (Value > m_completed_value.load(std::memory_order_acquire)) {
+    // First update completed value
+    UINT64 completedValue = m_completed_value.load(std::memory_order_acquire);
+    if (Value > completedValue) {
         m_completed_value.store(Value, std::memory_order_release);
         
-        // Signal any pending events that have reached their value
+        // Then process any pending events that have been reached
+        std::vector<std::pair<UINT64, HANDLE>> eventsToSignal;
         auto it = m_pendingEvents.begin();
         while (it != m_pendingEvents.end()) {
             if (Value >= it->first) {
-                if (it->second) {
-                    SetEvent(it->second);
+                if (it->second != nullptr && it->second != INVALID_HANDLE_VALUE) {
+                    eventsToSignal.emplace_back(it->first, it->second);
                 }
                 it = m_pendingEvents.erase(it);
             } else {
                 ++it;
             }
         }
+        
+        // Signal events after modifying the map to minimize lock contention
+        for (const auto& event : eventsToSignal) {
+            if (!SetEvent(event.second)) {
+                TRACE("  Failed to signal event %p for value %llu", event.second, event.first);
+                // Continue signaling other events even if one fails
+            }
+        }
     }
     
-    TRACE("  %u pending events remaining", m_pendingEvents.size());
+    TRACE("  %zu pending events remaining", m_pendingEvents.size());
     return S_OK;
 }
 

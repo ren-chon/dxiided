@@ -439,7 +439,7 @@ HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid, void** ppvObjec
     // Handle D3D11 resource mapping interface
     if (riid == __uuidof(ID3D11Resource)) {
         if (m_resource) {
-            AddRef();
+            m_resource->AddRef();  // AddRef on the underlying resource instead of the wrapper
             *ppvObject = m_resource.Get();
             return S_OK;
         }

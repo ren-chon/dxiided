@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "common/debug.hpp"
+#include "d3d11_impl/device.hpp"  // Add device header include
 
 namespace dxiided {
 
@@ -15,6 +16,8 @@ class WrappedD3D12ToD3D11Device;
 
 class WrappedD3D12ToD3D11SwapChain final : public IDXGISwapChain4 {
 public:
+
+
     static HRESULT Create(
         WrappedD3D12ToD3D11Device* device,
         IDXGIFactory* factory,
@@ -162,8 +165,9 @@ public:
     HRESULT STDMETHODCALLTYPE SetColorSpace1(DXGI_COLOR_SPACE_TYPE ColorSpace) override {
         TRACE("WrappedD3D12ToD3D11SwapChain::SetColorSpace1 called");
         TRACE("  ColorSpace: %d", ColorSpace);
-        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
-            swapchain3->SetColorSpace1(ColorSpace) : E_NOINTERFACE;
+        // return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swapchain3) == S_OK ?
+        //     swapchain3->SetColorSpace1(ColorSpace) : E_NOINTERFACE;
+        return S_OK;
     }
 
     HRESULT STDMETHODCALLTYPE ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height, 
@@ -187,10 +191,31 @@ public:
         TRACE("WrappedD3D12ToD3D11SwapChain::SetHDRMetaData called");
         TRACE("  Type: %d", Type);
         TRACE("  Size: %d", Size);
-        return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain4) == S_OK ?
-            swapchain4->SetHDRMetaData(Type, Size, pMetaData) : E_NOINTERFACE;
+        // return m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain4), (void**)&swapchain4) == S_OK ?
+        //     swapchain4->SetHDRMetaData(Type, Size, pMetaData) : E_NOINTERFACE;
+        return S_OK;
     }
+    static bool IsDXVKBackend(WrappedD3D12ToD3D11Device* device) {
+        // Try to detect if we're running DXVK 1.x by attempting to create a test texture
+        // we have to because DXVK 1.x's implementation of certain features is not supported
+        // and there are Linux users that are running DXVK 1.x because of of Vulkan 1.0 limitations in their iGPU
 
+        // When DXVK 1.x is detected, we'll use a single buffer with DISCARD swap effect,
+        // and when using WineD3D we'll use the requested buffer count with FLIP_SEQUENTIAL
+        D3D11_TEXTURE2D_DESC test_desc = {};
+        test_desc.Width = 1;
+        test_desc.Height = 1;
+        test_desc.MipLevels = 1;
+        test_desc.ArraySize = 1;
+        test_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        test_desc.SampleDesc.Count = 1;
+        test_desc.Usage = D3D11_USAGE_DEFAULT;
+        test_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> test_tex;
+        HRESULT test_hr = device->GetD3D11Device()->CreateTexture2D(&test_desc, nullptr, &test_tex);
+        return SUCCEEDED(test_hr);
+    }
 private:
     WrappedD3D12ToD3D11SwapChain(
         WrappedD3D12ToD3D11Device* device,

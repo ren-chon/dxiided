@@ -179,20 +179,28 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::ExecuteCommandLists(
             continue;
         }
         
+        // Hold a reference to the command list while we're using it
+        pList->AddRef();
+        
         ID3D11CommandList* d3d11List = nullptr;
         HRESULT hr = pList->GetD3D11CommandList(&d3d11List);
         if (FAILED(hr) || !d3d11List) {
             WARN("Failed to get D3D11 command list at index %u, hr %08x", i, hr);
+            pList->Release();
             continue;
         }
         
         // Execute the D3D11 command list
         m_immediateContext->ExecuteCommandList(d3d11List, FALSE);
+        
+        // Clean up
         d3d11List->Release();
+        pList->Release();
     }
     
-    // Ensure commands are flushed
+    // Ensure commands are flushed and synchronized
     m_immediateContext->Flush();
+    m_immediateContext->ClearState();
 }
 
 void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::SetMarker(UINT Metadata,
