@@ -150,7 +150,6 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::UpdateTileMappings(
         pResource, NumResourceRegions, pResourceRegionStartCoordinates,
         pResourceRegionSizes, pHeap, NumRanges, pRangeFlags,
         pHeapRangeStartOffsets, pRangeTileCounts, Flags);
-    // D3D11 doesn't support tiled resources in the same way
     FIXME("Tiled resource mapping not implemented.");
 }
 
@@ -208,21 +207,48 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::EndEvent() {
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::Signal(ID3D12Fence* pFence,
                                                     UINT64 Value) {
     TRACE("WrappedD3D12ToD3D11CommandQueue::Signal %p, %llu", pFence, Value);
-    // TODO: Implement fence synchronization
-    FIXME("Fence synchronization not implemented.");
+    
+    // Ensure all previous commands are completed
+    m_immediateContext->Flush();
+    
+    // Signal the fence
+    if (pFence) {
+        return pFence->Signal(Value);
+    }
+    
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::Wait(ID3D12Fence* pFence,
                                                   UINT64 Value) {
     TRACE("WrappedD3D12ToD3D11CommandQueue::Wait %p, %llu", pFence, Value);
-    // TODO: Implement fence synchronization
-    FIXME("Fence synchronization not implemented.");
+    
+    if (!pFence) {
+        return E_INVALIDARG;
+    }
+
+    // Create an event for synchronization
+    HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event) {
+        ERR("Failed to create event for fence synchronization");
+        return E_FAIL;
+    }
+
+    // Set up the event to be signaled when the fence reaches the value
+    HRESULT hr = pFence->SetEventOnCompletion(Value, event);
+    if (FAILED(hr)) {
+        CloseHandle(event);
+        return hr;
+    }
+
+    // Wait for the event to be signaled
+    WaitForSingleObject(event, INFINITE);
+    CloseHandle(event);
+
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE
-WrappedD3D12ToD3D11CommandQueue::GetTimestampFrequency(UINT64* pFrequency) {
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::GetTimestampFrequency(UINT64* pFrequency) {
     TRACE("WrappedD3D12ToD3D11CommandQueue::GetTimestampFrequency %p", pFrequency);
     if (!pFrequency) return E_INVALIDARG;
 
