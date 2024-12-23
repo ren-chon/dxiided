@@ -170,16 +170,29 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::ExecuteCommandLists(
     UINT NumCommandLists, ID3D12CommandList* const* ppCommandLists) {
     TRACE("WrappedD3D12ToD3D11CommandQueue::ExecuteCommandLists %u, %p", NumCommandLists,
           ppCommandLists);
-
+          
+    // Execute each command list
     for (UINT i = 0; i < NumCommandLists; i++) {
-        auto d3d11_list = static_cast<WrappedD3D12ToD3D11CommandList*>(ppCommandLists[i]);
-        Microsoft::WRL::ComPtr<ID3D11CommandList> native_list;
-        // Get the native D3D11 command list from our wrapper
-        if (SUCCEEDED(d3d11_list->GetD3D11CommandList(&native_list))) {
-            // Execute the command list on the immediate context
-            m_immediateContext->ExecuteCommandList(native_list.Get(), FALSE);
+        auto* pList = static_cast<WrappedD3D12ToD3D11CommandList*>(ppCommandLists[i]);
+        if (!pList) {
+            WARN("Null command list at index %u", i);
+            continue;
         }
+        
+        ID3D11CommandList* d3d11List = nullptr;
+        HRESULT hr = pList->GetD3D11CommandList(&d3d11List);
+        if (FAILED(hr) || !d3d11List) {
+            WARN("Failed to get D3D11 command list at index %u, hr %08x", i, hr);
+            continue;
+        }
+        
+        // Execute the D3D11 command list
+        m_immediateContext->ExecuteCommandList(d3d11List, FALSE);
+        d3d11List->Release();
     }
+    
+    // Ensure commands are flushed
+    m_immediateContext->Flush();
 }
 
 void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::SetMarker(UINT Metadata,
@@ -208,15 +221,37 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::Signal(ID3D12Fence* p
                                                     UINT64 Value) {
     TRACE("WrappedD3D12ToD3D11CommandQueue::Signal %p, %llu", pFence, Value);
     
+    if (!pFence) {
+        return E_INVALIDARG;
+    }
+    
     // Ensure all previous commands are completed
     m_immediateContext->Flush();
     
-    // Signal the fence
-    if (pFence) {
+    // Create a query to ensure GPU completion
+    D3D11_QUERY_DESC queryDesc;
+    queryDesc.Query = D3D11_QUERY_EVENT;
+    queryDesc.MiscFlags = 0;
+    
+    ID3D11Query* pQuery = nullptr;
+    HRESULT hr = m_device->GetD3D11Device()->CreateQuery(&queryDesc, &pQuery);
+    if (SUCCEEDED(hr) && pQuery) {
+        // End the query
+        m_immediateContext->End(pQuery);
+        
+        // Wait for the query to complete
+        while (m_immediateContext->GetData(pQuery, nullptr, 0, 0) == S_FALSE) {
+            Sleep(0);  // Yield to other threads
+        }
+        
+        pQuery->Release();
+        
+        // Signal the fence after GPU completion
         return pFence->Signal(Value);
     }
     
-    return S_OK;
+    // If query creation failed, still try to signal the fence
+    return pFence->Signal(Value);
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandQueue::Wait(ID3D12Fence* pFence,

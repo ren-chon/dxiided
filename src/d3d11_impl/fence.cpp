@@ -123,21 +123,28 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::SetEventOnCompletion(UINT64 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::Signal(UINT64 Value) {
     TRACE("WrappedD3D12ToD3D11Fence::Signal %llu", Value);
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_value = Value;
-    m_completed_value = Value;
     
-    // Signal any pending events that have reached their value
-    auto it = m_pendingEvents.begin();
-    while (it != m_pendingEvents.end()) {
-        if (Value >= it->first) {
-            if (it->second) {
-                SetEvent(it->second);
+    // Update the fence value
+    m_value.store(Value, std::memory_order_release);
+    
+    // Update completed value and process pending events
+    if (Value > m_completed_value.load(std::memory_order_acquire)) {
+        m_completed_value.store(Value, std::memory_order_release);
+        
+        // Signal any pending events that have reached their value
+        auto it = m_pendingEvents.begin();
+        while (it != m_pendingEvents.end()) {
+            if (Value >= it->first) {
+                if (it->second) {
+                    SetEvent(it->second);
+                }
+                it = m_pendingEvents.erase(it);
+            } else {
+                ++it;
             }
-            it = m_pendingEvents.erase(it);
-        } else {
-            ++it;
         }
     }
+    
     TRACE("  %u pending events remaining", m_pendingEvents.size());
     return S_OK;
 }

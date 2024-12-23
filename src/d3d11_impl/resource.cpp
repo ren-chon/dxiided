@@ -412,8 +412,7 @@ D3D11_USAGE WrappedD3D12ToD3D11Resource::GetD3D11Usage(
 }
 
 // IUnknown methods
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid,
-                                                        void** ppvObject) {
+HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid, void** ppvObject) {
     TRACE("WrappedD3D12ToD3D11Resource::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
@@ -421,24 +420,42 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::QueryInterface(REFIID rii
         return E_POINTER;
     }
 
-    if (riid == __uuidof(ID3D12Resource) || riid == __uuidof(IUnknown)) {
+    *ppvObject = nullptr;
+
+    if (riid == __uuidof(ID3D12Resource)) {
         TRACE("WrappedD3D12ToD3D11Resource::QueryInterface returning ID3D12Resource");
         AddRef();
-        *ppvObject = this;
+        *ppvObject = static_cast<ID3D12Resource*>(this);
         return S_OK;
+    }
+
+    if (riid == __uuidof(IUnknown)) {
+        TRACE("WrappedD3D12ToD3D11Resource::QueryInterface returning IUnknown");
+        AddRef();
+        *ppvObject = static_cast<IUnknown*>(this);
+        return S_OK;
+    }
+
+    // Handle D3D11 resource mapping interface
+    if (riid == __uuidof(ID3D11Resource)) {
+        if (m_resource) {
+            AddRef();
+            *ppvObject = m_resource.Get();
+            return S_OK;
+        }
     }
 
     WARN("Unknown interface %s.", debugstr_guid(&riid).c_str());
     return E_NOINTERFACE;
 }
 
-ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::AddRef() {
+ULONG WrappedD3D12ToD3D11Resource::AddRef() {
     ULONG ref = InterlockedIncrement(&m_refCount);
     TRACE("%p increasing refcount to %u.", this, ref);
     return ref;
 }
 
-ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Release() {
+ULONG WrappedD3D12ToD3D11Resource::Release() {
     ULONG ref = InterlockedDecrement(&m_refCount);
     TRACE("%p decreasing refcount to %u.", this, ref);
     if (ref == 0) {
@@ -448,7 +465,7 @@ ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Release() {
 }
 
 // ID3D12Object methods
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetPrivateData(REFGUID guid,
+HRESULT WrappedD3D12ToD3D11Resource::GetPrivateData(REFGUID guid,
                                                         UINT* pDataSize,
                                                         void* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::GetPrivateData called: %s, %p, %p",
@@ -456,7 +473,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetPrivateData(REFGUID gu
     return m_resource->GetPrivateData(guid, pDataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID guid,
+HRESULT WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID guid,
                                                         UINT DataSize,
                                                         const void* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::SetPrivateData %s, %u, %p",
@@ -464,14 +481,13 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID gu
     return m_resource->SetPrivateData(guid, DataSize, pData);
 }
 
-HRESULT STDMETHODCALLTYPE
-WrappedD3D12ToD3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
+HRESULT WrappedD3D12ToD3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::SetPrivateDataInterface %s, %p",
           debugstr_guid(&guid).c_str(), pData);
     return m_resource->SetPrivateDataInterface(guid, pData);
 }
 
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetName(LPCWSTR Name) {
+HRESULT WrappedD3D12ToD3D11Resource::SetName(LPCWSTR Name) {
     TRACE("WrappedD3D12ToD3D11Resource::SetName %s", debugstr_w(Name).c_str());
     return m_resource->SetPrivateData(
         WKPDID_D3DDebugObjectName,
@@ -479,7 +495,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::SetName(LPCWSTR Name) {
 }
 
 // ID3D12DeviceChild methods
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid,
+HRESULT WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid,
                                                    void** ppvDevice) {
     TRACE("WrappedD3D12ToD3D11Resource::GetDevice %s, %p", debugstr_guid(&riid).c_str(),
           ppvDevice);
@@ -487,7 +503,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid,
 }
 
 // ID3D12Resource methods
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
+HRESULT WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
                                              const D3D12_RANGE* pReadRange,
                                              void** ppData) {
     TRACE("WrappedD3D12ToD3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
@@ -531,13 +547,13 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
     return hr;
 }
 
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::Unmap(UINT Subresource,
+void WrappedD3D12ToD3D11Resource::Unmap(UINT Subresource,
                                             const D3D12_RANGE* pWrittenRange) {
     TRACE("WrappedD3D12ToD3D11Resource::Unmap %u, %p", Subresource, pWrittenRange);
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
-D3D12_RESOURCE_DESC* STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
+D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
     if (pDesc) {
         TRACE("WrappedD3D12ToD3D11Resource::GetDesc(%p)", pDesc);
         TRACE("  Dimension: %d", m_desc.Dimension);
@@ -555,13 +571,12 @@ D3D12_RESOURCE_DESC* STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetDesc(D3D1
     return pDesc;
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE
-WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
+D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     TRACE("WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress called");
     return m_gpuAddress;
 }
 
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::WriteToSubresource(
+HRESULT WrappedD3D12ToD3D11Resource::WriteToSubresource(
     UINT DstSubresource, const D3D12_BOX* pDstBox, const void* pSrcData,
     UINT SrcRowPitch, UINT SrcDepthPitch) {
     TRACE("WrappedD3D12ToD3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u",
@@ -575,7 +590,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::WriteToSubresource(
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::ReadFromSubresource(
+HRESULT WrappedD3D12ToD3D11Resource::ReadFromSubresource(
     void* pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource,
     const D3D12_BOX* pSrcBox) {
     TRACE("WrappedD3D12ToD3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p", pDstData,
@@ -587,7 +602,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::ReadFromSubresource(
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Resource::GetHeapProperties(
+HRESULT WrappedD3D12ToD3D11Resource::GetHeapProperties(
     D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS* pHeapFlags) {
     TRACE("WrappedD3D12ToD3D11Resource::GetHeapProperties %p, %p", pHeapProperties,
           pHeapFlags);

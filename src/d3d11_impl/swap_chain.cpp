@@ -25,13 +25,13 @@ HRESULT WrappedD3D12ToD3D11SwapChain::Create(
     TRACE(" BufferCount: %u", desc->BufferCount);
 
     // Validate buffer count
-    UINT buffer_count = desc->BufferCount < 1   ? 1
-                        : desc->BufferCount > 2 ? 2
-                                                : desc->BufferCount;
-
-    if (buffer_count != desc->BufferCount) {
-        ERR("Adjusted buffer count from %u to %u", desc->BufferCount,
-            buffer_count);
+    UINT buffer_count = desc->BufferCount;
+    if (buffer_count < 2) {
+        ERR("Buffer count must be at least 2 for proper operation, adjusting from %u to 2", buffer_count);
+        buffer_count = 2;
+    } else if (buffer_count > 3) {
+        ERR("Buffer count cannot exceed 3, adjusting from %u to 3", buffer_count);
+        buffer_count = 3;
     }
 
     DXGI_SWAP_CHAIN_DESC swapchain_desc = {};
@@ -42,15 +42,13 @@ HRESULT WrappedD3D12ToD3D11SwapChain::Create(
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
-    swapchain_desc.BufferUsage =
-        DXGI_USAGE_RENDER_TARGET_OUTPUT |
-        DXGI_USAGE_SHADER_INPUT;  // Allow both RT and SRV
+    swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_BACK_BUFFER;
     swapchain_desc.BufferCount = buffer_count;
     swapchain_desc.OutputWindow = window;
-    swapchain_desc.Windowed =
-        TRUE;  // We'll handle fullscreen transitions separately
-    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-    swapchain_desc.Flags = desc->Flags;
+    swapchain_desc.Windowed = TRUE;  // We'll handle fullscreen transitions separately
+    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;  // Use flip sequential for better compatibility
+    swapchain_desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | 
+                          DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
     // Get the D3D11 device
     ID3D11Device* d3d11Device = device->GetD3D11Device();
@@ -155,7 +153,7 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
         desc.BufferDesc.Format);
 
     // Validate buffer count matches what we requested
-    if (desc.BufferCount < 1 || desc.BufferCount > 2) {
+    if (desc.BufferCount < 1 || desc.BufferCount > 3) {
         ERR("Unexpected buffer count %u from swap chain", desc.BufferCount);
         return E_UNEXPECTED;
     }
@@ -182,19 +180,15 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
             reinterpret_cast<void**>(buffer.GetAddressOf()));
 
         if (FAILED(hr)) {
-            ERR("Failed to get back buffer %u, hr %#x - this is required for "
-                "proper operation",
+            ERR("Failed to get back buffer %u, hr %#x - this is required for proper operation",
                 i, hr);
+            ReleaseBackBuffers();  // Clean up any buffers we did get
             return hr;  // Fail if we can't get all buffers
         }
 
+        // Get original buffer description
         D3D11_TEXTURE2D_DESC tex_desc;
         buffer->GetDesc(&tex_desc);
-        TRACE(
-            "Back buffer %u validated - Width: %u, Height: %u, Format: %d, "
-            "ArraySize: %u, BindFlags: %#x",
-            i, tex_desc.Width, tex_desc.Height, tex_desc.Format,
-            tex_desc.ArraySize, tex_desc.BindFlags);
 
         // Create RTV description
         D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
@@ -204,11 +198,18 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
 
         // Create render target view
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
-        hr = m_device->CreateRenderTargetView(buffer.Get(), &rtv_desc, &rtv);
+        hr = m_device->GetD3D11Device()->CreateRenderTargetView(buffer.Get(), &rtv_desc, &rtv);
         if (FAILED(hr)) {
             ERR("Failed to create RTV for back buffer %u, hr %#x.", i, hr);
-            return hr;  // Still fail if we can't create RTV
+            ReleaseBackBuffers();
+            return hr;
         }
+
+        TRACE(
+            "Back buffer %u validated - Width: %u, Height: %u, Format: %d, "
+            "ArraySize: %u, BindFlags: %#x",
+            i, tex_desc.Width, tex_desc.Height, tex_desc.Format,
+            tex_desc.ArraySize, tex_desc.BindFlags);
 
         m_backbuffers.push_back(std::move(buffer));
         m_renderTargetViews.push_back(std::move(rtv));

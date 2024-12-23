@@ -13,7 +13,7 @@ std::mutex WrappedD3D12ToD3D11PipelineState::s_cacheMutex;
 HRESULT WrappedD3D12ToD3D11PipelineState::CreateGraphics(
     WrappedD3D12ToD3D11Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
-    TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
+    TRACE("WrappedD3D12ToD3D11PipelineState::CreateGraphics %p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
 
     if (!device || !pDesc || !ppPipelineState) {
@@ -47,7 +47,7 @@ HRESULT WrappedD3D12ToD3D11PipelineState::CreateGraphics(
 HRESULT WrappedD3D12ToD3D11PipelineState::CreateCompute(
     WrappedD3D12ToD3D11Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc,
     REFIID riid, void** ppPipelineState) {
-    TRACE("%p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
+    TRACE("WrappedD3D12ToD3D11PipelineState::CreateCompute %p, %p, %s, %p", device, pDesc, debugstr_guid(&riid).c_str(),
           ppPipelineState);
 
     if (!device || !pDesc || !ppPipelineState) {
@@ -80,6 +80,7 @@ HRESULT WrappedD3D12ToD3D11PipelineState::CreateCompute(
 
 Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState>
 WrappedD3D12ToD3D11PipelineState::GetCachedState(const PipelineStateKey& key) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::GetCachedState");
     std::lock_guard<std::mutex> lock(s_cacheMutex);
     auto it = s_pipelineStateCache.find(key);
     if (it != s_pipelineStateCache.end()) {
@@ -91,6 +92,7 @@ WrappedD3D12ToD3D11PipelineState::GetCachedState(const PipelineStateKey& key) {
 void WrappedD3D12ToD3D11PipelineState::CacheState(
     const PipelineStateKey& key,
     Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11PipelineState> state) {
+        TRACE("WrappedD3D12ToD3D11PipelineState::CacheState");
     std::lock_guard<std::mutex> lock(s_cacheMutex);
     s_pipelineStateCache[key] = state;
 }
@@ -98,6 +100,7 @@ void WrappedD3D12ToD3D11PipelineState::CacheState(
 WrappedD3D12ToD3D11PipelineState::PipelineStateKey
 WrappedD3D12ToD3D11PipelineState::ComputeHash(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
+        TRACE("WrappedD3D12ToD3D11PipelineState::ComputeHash");
     PipelineStateKey key;
 
     // Add all relevant fields to the hash
@@ -146,6 +149,7 @@ WrappedD3D12ToD3D11PipelineState::ComputeHash(
 WrappedD3D12ToD3D11PipelineState::PipelineStateKey
 WrappedD3D12ToD3D11PipelineState::ComputeHash(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc) {
+    TRACE("WrappedD3D12ToD3D11PipelineState::ComputeHash");
     PipelineStateKey key;
 
     // For compute pipeline, we only need to hash the compute shader
@@ -159,7 +163,7 @@ WrappedD3D12ToD3D11PipelineState::ComputeHash(
 WrappedD3D12ToD3D11PipelineState::WrappedD3D12ToD3D11PipelineState(
     WrappedD3D12ToD3D11Device* device)
     : m_device(device) {
-    TRACE("%p", device);
+    TRACE("WrappedD3D12ToD3D11PipelineState::WrappedD3D12ToD3D11PipelineState %p", device);
 }
 
 HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
@@ -364,6 +368,7 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
 HRESULT WrappedD3D12ToD3D11PipelineState::CreateStreamOutputShader(
     const D3D12_STREAM_OUTPUT_DESC* pSODesc, const void* pShaderBytecode,
     SIZE_T BytecodeLength) {
+        TRACE("WrappedD3D12ToD3D11PipelineState::CreateStreamOutputShader: Creating stream output shader");
     // Convert D3D12 stream output declarations to D3D11
     std::vector<D3D11_SO_DECLARATION_ENTRY> soDeclarations(pSODesc->NumEntries);
     for (UINT i = 0; i < pSODesc->NumEntries; i++) {
