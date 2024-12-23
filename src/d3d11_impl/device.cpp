@@ -4,6 +4,7 @@
 #include <d3d11_2.h>
 #include <dxgi1_2.h>
 
+#include "d3d11_impl/command_allocator.hpp"
 #include "d3d11_impl/descriptor_heap.hpp"
 #include "d3d11_impl/device_features.hpp"
 #include "d3d11_impl/resource.hpp"
@@ -217,7 +218,8 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommandAllocator(
     TRACE("WrappedD3D12ToD3D11Device::CreateCommandAllocator called on object %p", this);
     TRACE("  Type: %d, riid: %s, ppCommandAllocator: %p", type,
           debugstr_guid(&riid).c_str(), ppCommandAllocator);
-    return E_NOTIMPL;
+          
+    return WrappedD3D12ToD3D11CommandAllocator::Create(this, type, riid, ppCommandAllocator);
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateGraphicsPipelineState(
