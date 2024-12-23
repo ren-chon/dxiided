@@ -130,43 +130,58 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::SetEventOnCompletion(UINT64 
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Fence::Signal(UINT64 Value) {
-    TRACE("WrappedD3D12ToD3D11Fence::Signal %llu", Value);
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
-    // Update the fence value atomically
-    UINT64 oldValue = m_value.load(std::memory_order_acquire);
-    m_value.store(Value, std::memory_order_release);
-    
-    // First update completed value
-    UINT64 completedValue = m_completed_value.load(std::memory_order_acquire);
-    if (Value > completedValue) {
-        m_completed_value.store(Value, std::memory_order_release);
+    try {
+        TRACE("WrappedD3D12ToD3D11Fence::Signal %llu", Value);
         
-        // Then process any pending events that have been reached
-        std::vector<std::pair<UINT64, HANDLE>> eventsToSignal;
-        auto it = m_pendingEvents.begin();
-        while (it != m_pendingEvents.end()) {
-            if (Value >= it->first) {
-                if (it->second != nullptr && it->second != INVALID_HANDLE_VALUE) {
-                    eventsToSignal.emplace_back(it->first, it->second);
+        // Take mutex before any operations to prevent race conditions
+        std::unique_lock<std::mutex> lock(m_mutex);
+        
+        // Update the fence value atomically
+        m_value.store(Value, std::memory_order_release);
+        
+        // Update completed value if new value is higher
+        UINT64 completedValue = m_completed_value.load(std::memory_order_acquire);
+        if (Value > completedValue) {
+            m_completed_value.store(Value, std::memory_order_release);
+            
+            // Process pending events that have been reached
+            std::vector<std::pair<UINT64, HANDLE>> eventsToSignal;
+            eventsToSignal.reserve(m_pendingEvents.size());
+            
+            auto it = m_pendingEvents.begin();
+            while (it != m_pendingEvents.end()) {
+                if (Value >= it->first) {
+                    if (it->second != nullptr && it->second != INVALID_HANDLE_VALUE) {
+                        eventsToSignal.emplace_back(it->first, it->second);
+                    }
+                    it = m_pendingEvents.erase(it);
+                } else {
+                    ++it;
                 }
-                it = m_pendingEvents.erase(it);
-            } else {
-                ++it;
+            }
+            
+            // Release lock before signaling events
+            lock.unlock();
+            
+            // Signal events outside the lock
+            for (const auto& [eventValue, event] : eventsToSignal) {
+                TRACE("  Signaling event %p for value %llu", event, eventValue);
+                if (!SetEvent(event)) {
+                    WARN("Failed to signal event %p for value %llu: %lu", 
+                         event, eventValue, GetLastError());
+                }
             }
         }
         
-        // Signal events after modifying the map to minimize lock contention
-        for (const auto& event : eventsToSignal) {
-            if (!SetEvent(event.second)) {
-                TRACE("  Failed to signal event %p for value %llu", event.second, event.first);
-                // Continue signaling other events even if one fails
-            }
-        }
+        TRACE("  %zu pending events remaining", m_pendingEvents.size());
+        return S_OK;
+    } catch (const std::exception& e) {
+        WARN("Exception in WrappedD3D12ToD3D11Fence::Signal: %s", e.what());
+        return E_FAIL;
+    } catch (...) {
+        WARN("Unknown exception in WrappedD3D12ToD3D11Fence::Signal");
+        return E_FAIL;
     }
-    
-    TRACE("  %zu pending events remaining", m_pendingEvents.size());
-    return S_OK;
 }
 
 }  // namespace dxiided

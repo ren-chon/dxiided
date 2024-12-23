@@ -69,6 +69,24 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
 
     D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc);
     D3D11_USAGE usage = GetD3D11Usage(pHeapProperties);
+    DXGI_FORMAT format = pDesc->Format;
+
+    // Handle depth-stencil formats
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+        switch (format) {
+            case DXGI_FORMAT_R32_TYPELESS:
+                format = DXGI_FORMAT_D32_FLOAT;
+                break;
+            case DXGI_FORMAT_R24G8_TYPELESS:
+                format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+                break;
+            case DXGI_FORMAT_R16_TYPELESS:
+                format = DXGI_FORMAT_D16_UNORM;
+                break;
+        }
+    } else {
+        format = GetViewFormat(format);
+    }
 
     switch (pDesc->Dimension) {
         case D3D12_RESOURCE_DIMENSION_BUFFER: {
@@ -105,7 +123,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
             texDesc.Width = static_cast<UINT>(pDesc->Width);
             texDesc.MipLevels = pDesc->MipLevels;
             texDesc.ArraySize = pDesc->DepthOrArraySize;
-            texDesc.Format = GetViewFormat(pDesc->Format);
+            texDesc.Format = format;
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
             texDesc.CPUAccessFlags =
@@ -133,7 +151,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
             texDesc.Height = pDesc->Height;
             texDesc.MipLevels = pDesc->MipLevels;
             texDesc.ArraySize = pDesc->DepthOrArraySize;
-            texDesc.Format = GetViewFormat(pDesc->Format);
+            texDesc.Format = format;
             texDesc.SampleDesc = pDesc->SampleDesc;
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
@@ -162,7 +180,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
             texDesc.Height = pDesc->Height;
             texDesc.Depth = pDesc->DepthOrArraySize;
             texDesc.MipLevels = pDesc->MipLevels;
-            texDesc.Format = GetViewFormat(pDesc->Format);
+            texDesc.Format = format;
             texDesc.Usage = usage;
             texDesc.BindFlags = bindFlags;
             texDesc.CPUAccessFlags =
@@ -373,10 +391,28 @@ DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
             return DXGI_FORMAT_R8G8B8A8_UNORM;
         case DXGI_FORMAT_R16G16_TYPELESS:
             return DXGI_FORMAT_R16G16_UNORM;
-        case DXGI_FORMAT_R32_TYPELESS:
-            return DXGI_FORMAT_R32_FLOAT;
         case DXGI_FORMAT_R8G8_TYPELESS:
             return DXGI_FORMAT_R8G8_UNORM;
+        case DXGI_FORMAT_BC1_TYPELESS:
+            return DXGI_FORMAT_BC1_UNORM;
+        case DXGI_FORMAT_BC2_TYPELESS:
+            return DXGI_FORMAT_BC2_UNORM;
+        case DXGI_FORMAT_BC3_TYPELESS:
+            return DXGI_FORMAT_BC3_UNORM;
+        case DXGI_FORMAT_BC4_TYPELESS:
+            return DXGI_FORMAT_BC4_UNORM;
+        case DXGI_FORMAT_BC5_TYPELESS:
+            return DXGI_FORMAT_BC5_UNORM;
+        case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+            return DXGI_FORMAT_B8G8R8A8_UNORM;
+        case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+            return DXGI_FORMAT_B8G8R8X8_UNORM;
+        case DXGI_FORMAT_BC6H_TYPELESS:
+            return DXGI_FORMAT_BC6H_UF16;
+        case DXGI_FORMAT_BC7_TYPELESS:
+            return DXGI_FORMAT_BC7_UNORM;
+        case DXGI_FORMAT_R32_TYPELESS:
+            return DXGI_FORMAT_R32_FLOAT;
         case DXGI_FORMAT_R16_TYPELESS:
             return DXGI_FORMAT_R16_UNORM;
         case DXGI_FORMAT_R8_TYPELESS:

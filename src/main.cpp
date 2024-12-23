@@ -11,16 +11,77 @@
 #include <atomic>
 #include "common/debug.hpp"
 #include "d3d11_impl/device.hpp"
+#include <windows.h>
+#include <dbghelp.h>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
+#include <csignal>
 
 using Microsoft::WRL::ComPtr;
 using namespace dxiided;
+
+namespace {
+    // Global exception handler
+    LONG WINAPI CustomUnhandledExceptionFilter(EXCEPTION_POINTERS* ExceptionInfo) {
+        std::stringstream ss;
+        auto time = std::time(nullptr);
+        auto localtime = std::localtime(&time);
+
+        ss << "\n=== Crash Report " << std::put_time(localtime, "%Y-%m-%d %H:%M:%S") << " ===\n";
+        ss << "Exception Code: 0x" << std::hex << ExceptionInfo->ExceptionRecord->ExceptionCode << "\n";
+        ss << "Exception Address: 0x" << ExceptionInfo->ExceptionRecord->ExceptionAddress << "\n";
+        ss << "Exception Flags: 0x" << ExceptionInfo->ExceptionRecord->ExceptionFlags << "\n";
+
+        // Get stack trace
+        HANDLE process = GetCurrentProcess();
+        HANDLE thread = GetCurrentThread();
+        
+        SymInitialize(process, NULL, TRUE);
+        
+        void* stack[100];
+        WORD frames = CaptureStackBackTrace(0, 100, stack, NULL);
+        SYMBOL_INFO* symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + 256 * sizeof(char), 1);
+        symbol->MaxNameLen = 255;
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+
+        ss << "\nStack trace:\n";
+        for(int i = 0; i < frames; i++) {
+            SymFromAddr(process, (DWORD64)(stack[i]), 0, symbol);
+            ss << std::dec << frames - i - 1 << ": " << symbol->Name << " at 0x" 
+               << std::hex << symbol->Address << "\n";
+        }
+
+        free(symbol);
+        SymCleanup(process);
+
+        // Log the crash report using the correct format
+        debug::Logger::Instance().Trace(__FILE__, __LINE__, "Crash Report:\n%s", ss.str().c_str());
+        
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    // Signal handler for abnormal termination
+    void SignalHandler(int signal) {
+        debug::Logger::Instance().Trace(__FILE__, __LINE__, "Signal %d caught", signal);
+    }
+}
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void* reserved) {
     switch (reason) {
         case DLL_PROCESS_ATTACH:
             DisableThreadLibraryCalls(instance);
             debug::Logger::Instance().Initialize();
+            
+            // Install exception handlers
+            SetUnhandledExceptionFilter(CustomUnhandledExceptionFilter);
+            signal(SIGABRT, SignalHandler);
+            signal(SIGFPE, SignalHandler);
+            signal(SIGILL, SignalHandler);
+            signal(SIGSEGV, SignalHandler);
+            signal(SIGTERM, SignalHandler);
             break;
+            
         case DLL_PROCESS_DETACH:
             break;
     }

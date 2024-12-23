@@ -1,4 +1,5 @@
 #include "d3d11_impl/command_list.hpp"
+#include "d3d11_impl/resource.hpp"
 
 #include "common/debug.hpp"
 #include "common/debug_symbols.hpp"
@@ -11,7 +12,9 @@ HRESULT WrappedD3D12ToD3D11CommandList::Create(WrappedD3D12ToD3D11Device* device
                                  ID3D12CommandAllocator* allocator,
                                  ID3D12PipelineState* initial_state,
                                  REFIID riid, void** command_list) {
+        TRACE("WrappedD3D12ToD3D11CommandList::Create called");
     if (!device || !command_list) {
+        ERR("WrappedD3D12ToD3D11CommandList::Create: Invalid parameters.");
         return E_INVALIDARG;
     }
 
@@ -39,6 +42,8 @@ WrappedD3D12ToD3D11CommandList::WrappedD3D12ToD3D11CommandList(
 // IUnknown methods
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::QueryInterface(REFIID riid,
                                                            void** ppvObject) {
+    TRACE("WrappedD3D12ToD3D11CommandList::QueryInterface called for %s, %p",
+          debugstr_guid(&riid).c_str(), ppvObject);
                                                     
     if (!ppvObject) {
         return E_POINTER;
@@ -86,6 +91,7 @@ WrappedD3D12ToD3D11CommandList::SetPrivateDataInterface(REFGUID guid, const IUnk
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::SetName(LPCWSTR Name) {
+    TRACE("WrappedD3D12ToD3D11CommandList::SetName");
     return m_context->SetPrivateData(
         WKPDID_D3DDebugObjectName,
         static_cast<UINT>((wcslen(Name) + 1) * sizeof(WCHAR)), Name);
@@ -94,11 +100,13 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::SetName(LPCWSTR Name) 
 // ID3D12DeviceChild methods
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::GetDevice(REFIID riid,
                                                       void** ppvDevice) {
+                                                        TRACE("WrappedD3D12ToD3D11CommandList::GetDevice");
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12CommandList methods
 D3D12_COMMAND_LIST_TYPE STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::GetType() {
+    TRACE("WrappedD3D12ToD3D11CommandList::GetType");
     return m_type;
 }
 
@@ -300,33 +308,33 @@ void WrappedD3D12ToD3D11CommandList::ResolveSubresource(ID3D12Resource* pDstReso
                                           ID3D12Resource* pSrcResource,
                                           UINT SrcSubresource,
                                           DXGI_FORMAT Format) {
-    TRACE("(%p, %u, %p, %u, %d)", pDstResource, DstSubresource, pSrcResource,
+    TRACE("WrappedD3D12ToD3D11CommandList::ResolveSubresource (%p, %u, %p, %u, %d)", pDstResource, DstSubresource, pSrcResource,
           SrcSubresource, Format);
     // TODO: Implement subresource resolution
 }
 
 void WrappedD3D12ToD3D11CommandList::IASetPrimitiveTopology(
     D3D12_PRIMITIVE_TOPOLOGY PrimitiveTopology) {
-    TRACE("(%d)", PrimitiveTopology);
+    TRACE("WrappedD3D12ToD3D11CommandList::IASetPrimitiveTopology (%d)", PrimitiveTopology);
     m_context->IASetPrimitiveTopology(
         static_cast<D3D11_PRIMITIVE_TOPOLOGY>(PrimitiveTopology));
 }
 
 void WrappedD3D12ToD3D11CommandList::RSSetViewports(UINT NumViewports,
                                       const D3D12_VIEWPORT* pViewports) {
-    TRACE("(%u, %p)", NumViewports, pViewports);
+    TRACE("WrappedD3D12ToD3D11CommandList::RSSetViewports(%u, %p)", NumViewports, pViewports);
     m_context->RSSetViewports(
         NumViewports, reinterpret_cast<const D3D11_VIEWPORT*>(pViewports));
 }
 
 void WrappedD3D12ToD3D11CommandList::RSSetScissorRects(UINT NumRects,
                                          const D3D12_RECT* pRects) {
-    TRACE("(%u, %p)", NumRects, pRects);
+    TRACE("WrappedD3D12ToD3D11CommandList::RSSetScissorRects(%u, %p)", NumRects, pRects);
     m_context->RSSetScissorRects(NumRects, pRects);
 }
 
 void WrappedD3D12ToD3D11CommandList::OMSetBlendFactor(const FLOAT BlendFactor[4]) {
-    TRACE("(%p)", BlendFactor);
+    TRACE("WrappedD3D12ToD3D11CommandList::OMSetBlendFactor(%p)", BlendFactor);
     float currentBlendFactor[4];
     UINT SampleMask;
     ID3D11BlendState* blendState;
@@ -450,24 +458,70 @@ void WrappedD3D12ToD3D11CommandList::SetGraphicsRootUnorderedAccessView(
     // TODO: Implement graphics root unordered access view setting
 }
 
-void WrappedD3D12ToD3D11CommandList::IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* pView) {
+void WrappedD3D12ToD3D11CommandList::IASetIndexBuffer(
+    const D3D12_INDEX_BUFFER_VIEW* pView) {
     TRACE("WrappedD3D12ToD3D11CommandList::IASetIndexBuffer(%p)", pView);
-    if (pView) {
-        D3D11_BUFFER_DESC desc = {};
-        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-        desc.ByteWidth = pView->SizeInBytes;
-        desc.Usage = D3D11_USAGE_DEFAULT;
 
-        // TODO: Create and set index buffer
-    } else {
+    if (!pView) {
         m_context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+        return;
     }
+
+    auto resource = static_cast<WrappedD3D12ToD3D11Resource*>(
+        reinterpret_cast<ID3D12Resource*>(pView->BufferLocation));
+    if (!resource) {
+        ERR("Failed to get resource from buffer location");
+        return;
+    }
+
+    auto d3d11Buffer = resource->GetD3D11Resource();
+    if (!d3d11Buffer) {
+        ERR("Failed to get D3D11 buffer");
+        return;
+    }
+
+    m_context->IASetIndexBuffer(
+        static_cast<ID3D11Buffer*>(d3d11Buffer),
+        pView->Format,
+        pView->BufferLocation & 0xFFFFFFFF);  // Use lower 32-bits as offset
 }
 
 void WrappedD3D12ToD3D11CommandList::IASetVertexBuffers(
     UINT StartSlot, UINT NumViews, const D3D12_VERTEX_BUFFER_VIEW* pViews) {
-    TRACE("WrappedD3D12ToD3D11CommandList::IASetVertexBuffers(%u, %u, %p)", StartSlot, NumViews, pViews);
-    // TODO: Implement vertex buffer setting
+    if (!pViews) {
+        ERR("Invalid vertex buffer views");
+        return;
+    }
+
+    std::vector<ID3D11Buffer*> buffers(NumViews);
+    std::vector<UINT> strides(NumViews);
+    std::vector<UINT> offsets(NumViews);
+
+    for (UINT i = 0; i < NumViews; i++) {
+        const auto& view = pViews[i];
+        ID3D11Resource* resource = nullptr;
+        HRESULT hr = reinterpret_cast<ID3D12Resource*>(view.BufferLocation)->QueryInterface(
+            __uuidof(ID3D11Resource), (void**)&resource);
+        if (FAILED(hr)) {
+            ERR("Failed to get D3D11 resource for vertex buffer %u", i);
+            // Clean up previously acquired resources
+            for (UINT j = 0; j < i; j++) {
+                buffers[j]->Release();
+            }
+            return;
+        }
+        buffers[i] = reinterpret_cast<ID3D11Buffer*>(resource);
+        strides[i] = view.StrideInBytes;
+        offsets[i] = 0;
+    }
+
+    m_context->IASetVertexBuffers(StartSlot, NumViews, buffers.data(),
+                                 strides.data(), offsets.data());
+
+    // Clean up
+    for (UINT i = 0; i < NumViews; i++) {
+        buffers[i]->Release();
+    }
 }
 
 void WrappedD3D12ToD3D11CommandList::SOSetTargets(
@@ -582,13 +636,6 @@ void WrappedD3D12ToD3D11CommandList::ExecuteIndirect(
     // TODO: Implement indirect execution
 }
 
-void STDMETHODCALLTYPE
-WrappedD3D12ToD3D11CommandList::ClearState(ID3D12PipelineState* pPipelineState) {
-    TRACE("WrappedD3D12ToD3D11CommandList::ClearState(%p)", pPipelineState);
-
-    m_context->ClearState();
-}
-
 void WrappedD3D12ToD3D11CommandList::CopyTextureRegion(
     const D3D12_TEXTURE_COPY_LOCATION* pDst, UINT DstX, UINT DstY, UINT DstZ,
     const D3D12_TEXTURE_COPY_LOCATION* pSrc, const D3D12_BOX* pSrcBox) {
@@ -603,16 +650,115 @@ void WrappedD3D12ToD3D11CommandList::CopyTextureRegion(
     ID3D11Resource* d3d11SrcResource = nullptr;
     ID3D11Resource* d3d11DstResource = nullptr;
 
-    HRESULT hr = pSrc->pResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11SrcResource);
-    if (FAILED(hr)) {
-        ERR("Failed to get D3D11 source resource");
+    auto srcResource = static_cast<WrappedD3D12ToD3D11Resource*>(pSrc->pResource);
+    auto dstResource = static_cast<WrappedD3D12ToD3D11Resource*>(pDst->pResource);
+
+    if (!srcResource || !dstResource) {
+        ERR("Invalid source or destination resource");
         return;
     }
 
-    hr = pDst->pResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11DstResource);
-    if (FAILED(hr)) {
-        d3d11SrcResource->Release();
-        ERR("Failed to get D3D11 destination resource");
+    d3d11SrcResource = srcResource->GetD3D11Resource();
+    d3d11DstResource = dstResource->GetD3D11Resource();
+
+    if (!d3d11SrcResource || !d3d11DstResource) {
+        ERR("Failed to get D3D11 resources");
+        return;
+    }
+
+    D3D12_RESOURCE_DESC srcDesc = {};
+    D3D12_RESOURCE_DESC dstDesc = {};
+    srcResource->GetDesc(&srcDesc);
+    dstResource->GetDesc(&dstDesc);
+
+    // Special handling for buffer to texture copy
+    if (srcDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && 
+        dstDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+        
+        // Validate resources before proceeding
+        if (!d3d11SrcResource || !d3d11DstResource) {
+            ERR("Invalid D3D11 resources for copy operation");
+            return;
+        }
+
+        try {
+            // Get footprint from destination texture
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
+            UINT numRows = 0;
+            UINT64 rowSizeInBytes = 0;
+            UINT64 totalBytes = 0;
+
+            // Get copyable footprints
+            m_device->GetCopyableFootprints(
+                &dstDesc, 
+                pDst->SubresourceIndex, 
+                1,
+                pSrc->PlacedFootprint.Offset, 
+                &footprint,
+                &numRows, 
+                &rowSizeInBytes, 
+                &totalBytes);
+
+            // Validate the footprint after getting it
+            if (footprint.Footprint.Format == DXGI_FORMAT_UNKNOWN ||
+                footprint.Footprint.Width == 0 ||
+                footprint.Footprint.Height == 0 ||
+                rowSizeInBytes == 0) {
+                ERR("Invalid footprint returned from GetCopyableFootprints");
+                return;
+            }
+
+            // Validate total memory required
+            if (totalBytes > (1ULL << 31)) {  // Sanity check for 2GB limit
+                ERR("Copy operation requires too much memory: %llu bytes", totalBytes);
+                return;
+            }
+
+            // For debugging
+            TRACE("Copy operation memory requirements:");
+            TRACE("Total bytes: %llu", totalBytes);
+            TRACE("Row size in bytes: %llu", rowSizeInBytes);
+            TRACE("Number of rows: %u", numRows);
+
+            // Validate dimensions
+            if (footprint.Footprint.Width == 0 || footprint.Footprint.Height == 0 ||
+                footprint.Footprint.Width > dstDesc.Width ||
+                footprint.Footprint.Height > dstDesc.Height) {
+                ERR("Invalid footprint dimensions: %ux%u (max: %ux%u)",
+                    footprint.Footprint.Width, footprint.Footprint.Height,
+                    dstDesc.Width, dstDesc.Height);
+                return;
+            }
+
+            // Use computed footprint dimensions
+            D3D11_BOX srcBox = {};
+            srcBox.left = 0;
+            srcBox.right = footprint.Footprint.Width;
+            srcBox.top = 0;
+            srcBox.bottom = footprint.Footprint.Height;
+            srcBox.front = 0;
+            srcBox.back = 1;
+
+            // Perform the copy with exception handling
+            m_context->CopySubresourceRegion(
+                d3d11DstResource,
+                pDst->SubresourceIndex,
+                DstX, DstY, DstZ,
+                d3d11SrcResource,
+                0,
+                &srcBox);
+
+        } catch (const std::exception& e) {
+            ERR("Exception during copy operation: %s", e.what());
+            return;
+        }
+        return;
+    }
+
+    // Regular texture to texture copy
+    if (srcDesc.Dimension != dstDesc.Dimension) {
+        ERR("Incompatible D3D12 resource dimensions: src=%d, dst=%d", 
+            srcDesc.Dimension, dstDesc.Dimension);
         return;
     }
 
@@ -627,14 +773,13 @@ void WrappedD3D12ToD3D11CommandList::CopyTextureRegion(
         d3d11SrcBox.back = pSrcBox->back;
     }
 
-    // Copy the texture region
     m_context->CopySubresourceRegion(
-        d3d11DstResource, pDst->SubresourceIndex, DstX, DstY, DstZ,
-        d3d11SrcResource, pSrc->SubresourceIndex, pSrcBox ? &d3d11SrcBox : nullptr);
-
-    // Clean up
-    d3d11SrcResource->Release();
-    d3d11DstResource->Release();
+        d3d11DstResource,
+        pDst->SubresourceIndex,
+        DstX, DstY, DstZ,
+        d3d11SrcResource,
+        pSrc->SubresourceIndex,
+        pSrcBox ? &d3d11SrcBox : nullptr);
 }
 
 void WrappedD3D12ToD3D11CommandList::DrawInstanced(
@@ -699,6 +844,12 @@ void WrappedD3D12ToD3D11CommandList::ResourceBarrier(
     TRACE("ResourceBarrier: %u, %p", NumBarriers, pBarriers);
     // D3D11 handles resource states automatically, so we can ignore barriers
     TRACE("Ignoring %u resource barriers.", NumBarriers);
+}
+
+void WrappedD3D12ToD3D11CommandList::ClearState(ID3D12PipelineState* pPipelineState) {
+    TRACE("WrappedD3D12ToD3D11CommandList::ClearState(%p)", pPipelineState);
+
+    m_context->ClearState();
 }
 
 }  // namespace dxiided

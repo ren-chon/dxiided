@@ -5,7 +5,7 @@ CXXFLAGS = -O0 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -std=
 LDFLAGS = -static -static-libgcc -static-libstdc++ -Wl,--enable-stdcall-fixup
 
 INCLUDES = -Iinclude
-LIBS = -ld3d11 -ldxgi -lole32 -ldxguid -ld3d10 -ld3dcompiler -luser32 -lgdi32
+LIBS = -ld3d11 -ldxgi -lole32 -ldxguid -ld3d10 -ld3dcompiler -luser32 -lgdi32 -ldbghelp
 
 BUILD_DIR = build
 COMMON_SOURCES = src/common/debug.cpp src/common/debug_symbols.cpp
