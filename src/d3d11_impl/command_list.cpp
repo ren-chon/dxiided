@@ -137,8 +137,151 @@ HRESULT WrappedD3D12ToD3D11CommandList::Reset(ID3D12CommandAllocator* pAllocator
 
 void WrappedD3D12ToD3D11CommandList::CopyResource(ID3D12Resource* pDstResource,
                                     ID3D12Resource* pSrcResource) {
-    TRACE("(%p, %p)", pDstResource, pSrcResource);
-    // TODO: Implement resource copying
+    TRACE("CopyResource: %p -> %p", pSrcResource, pDstResource);
+    
+    // Get the underlying D3D11 resources
+    ID3D11Resource* d3d11SrcResource = nullptr;
+    ID3D11Resource* d3d11DstResource = nullptr;
+    
+    if (!pSrcResource || !pDstResource) {
+        ERR("Invalid source or destination resource");
+        return;
+    }
+
+    HRESULT hr = pSrcResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11SrcResource);
+    if (FAILED(hr)) {
+        ERR("Failed to get D3D11 source resource");
+        return;
+    }
+
+    hr = pDstResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11DstResource);
+    if (FAILED(hr)) {
+        d3d11SrcResource->Release();
+        ERR("Failed to get D3D11 destination resource");
+        return;
+    }
+
+    // Perform the copy
+    m_context->CopyResource(d3d11DstResource, d3d11SrcResource);
+
+    // Clean up
+    d3d11SrcResource->Release();
+    d3d11DstResource->Release();
+}
+
+void WrappedD3D12ToD3D11CommandList::CopyBufferRegion(
+    ID3D12Resource* pDstBuffer, UINT64 DstOffset, ID3D12Resource* pSrcBuffer,
+    UINT64 SrcOffset, UINT64 NumBytes) {
+    TRACE("CopyBufferRegion: %p[%llu] -> %p[%llu], size=%llu", pSrcBuffer, SrcOffset,
+          pDstBuffer, DstOffset, NumBytes);
+
+    class ScopedResources {
+    public:
+        ID3D11Buffer* d3d11SrcBuffer = nullptr;
+        ID3D11Buffer* d3d11DstBuffer = nullptr;
+        ID3D11Buffer* stagingSrcBuffer = nullptr;
+        ID3D11Buffer* stagingDstBuffer = nullptr;
+        ID3D11Device* device = nullptr;
+
+        ~ScopedResources() {
+            if (stagingSrcBuffer) stagingSrcBuffer->Release();
+            if (stagingDstBuffer) stagingDstBuffer->Release();
+            if (d3d11SrcBuffer) d3d11SrcBuffer->Release();
+            if (d3d11DstBuffer) d3d11DstBuffer->Release();
+            if (device) device->Release();
+        }
+    } resources;
+
+    if (!pSrcBuffer || !pDstBuffer) {
+        ERR("Invalid source or destination buffer");
+        return;
+    }
+
+    HRESULT hr = pSrcBuffer->QueryInterface(__uuidof(ID3D11Buffer), (void**)&resources.d3d11SrcBuffer);
+    if (FAILED(hr)) {
+        ERR("Failed to get D3D11 source buffer");
+        return;
+    }
+
+    hr = pDstBuffer->QueryInterface(__uuidof(ID3D11Buffer), (void**)&resources.d3d11DstBuffer);
+    if (FAILED(hr)) {
+        ERR("Failed to get D3D11 destination buffer");
+        return;
+    }
+
+    // Create staging buffers
+    m_context->GetDevice(&resources.device);
+    if (!resources.device) {
+        ERR("Failed to get D3D11 device");
+        return;
+    }
+
+    D3D11_BUFFER_DESC stagingDesc = {};
+    stagingDesc.ByteWidth = static_cast<UINT>(NumBytes);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+    stagingDesc.BindFlags = 0;
+    stagingDesc.MiscFlags = 0;
+    stagingDesc.StructureByteStride = 0;
+
+    hr = resources.device->CreateBuffer(&stagingDesc, nullptr, &resources.stagingSrcBuffer);
+    if (FAILED(hr)) {
+        ERR("Failed to create source staging buffer");
+        return;
+    }
+
+    hr = resources.device->CreateBuffer(&stagingDesc, nullptr, &resources.stagingDstBuffer);
+    if (FAILED(hr)) {
+        ERR("Failed to create destination staging buffer");
+        return;
+    }
+
+    // Copy from source to staging
+    D3D11_BOX srcBox = {};
+    srcBox.left = static_cast<UINT>(SrcOffset);
+    srcBox.right = static_cast<UINT>(SrcOffset + NumBytes);
+    srcBox.top = 0;
+    srcBox.bottom = 1;
+    srcBox.front = 0;
+    srcBox.back = 1;
+
+    m_context->CopySubresourceRegion(resources.stagingSrcBuffer, 0, 0, 0, 0, 
+                                    resources.d3d11SrcBuffer, 0, &srcBox);
+
+    // Map staging buffers and copy data
+    D3D11_MAPPED_SUBRESOURCE srcMapped = {};
+    hr = m_context->Map(resources.stagingSrcBuffer, 0, D3D11_MAP_READ, 0, &srcMapped);
+    if (FAILED(hr)) {
+        ERR("Failed to map source staging buffer");
+        return;
+    }
+
+    D3D11_MAPPED_SUBRESOURCE dstMapped = {};
+    hr = m_context->Map(resources.stagingDstBuffer, 0, D3D11_MAP_WRITE, 0, &dstMapped);
+    if (FAILED(hr)) {
+        m_context->Unmap(resources.stagingSrcBuffer, 0);
+        ERR("Failed to map destination staging buffer");
+        return;
+    }
+
+    // Copy the data
+    memcpy(dstMapped.pData, srcMapped.pData, static_cast<size_t>(NumBytes));
+
+    // Unmap buffers
+    m_context->Unmap(resources.stagingSrcBuffer, 0);
+    m_context->Unmap(resources.stagingDstBuffer, 0);
+
+    // Copy from staging to destination
+    D3D11_BOX dstBox = {};
+    dstBox.left = 0;
+    dstBox.right = static_cast<UINT>(NumBytes);
+    dstBox.top = 0;
+    dstBox.bottom = 1;
+    dstBox.front = 0;
+    dstBox.back = 1;
+
+    m_context->CopySubresourceRegion(resources.d3d11DstBuffer, 0, static_cast<UINT>(DstOffset), 0, 0,
+                                    resources.stagingDstBuffer, 0, &dstBox);
 }
 
 void WrappedD3D12ToD3D11CommandList::CopyTiles(
@@ -446,7 +589,55 @@ WrappedD3D12ToD3D11CommandList::ClearState(ID3D12PipelineState* pPipelineState) 
     m_context->ClearState();
 }
 
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::DrawInstanced(
+void WrappedD3D12ToD3D11CommandList::CopyTextureRegion(
+    const D3D12_TEXTURE_COPY_LOCATION* pDst, UINT DstX, UINT DstY, UINT DstZ,
+    const D3D12_TEXTURE_COPY_LOCATION* pSrc, const D3D12_BOX* pSrcBox) {
+    TRACE("CopyTextureRegion: dst[%u,%u,%u]", DstX, DstY, DstZ);
+
+    if (!pDst || !pSrc) {
+        ERR("Invalid source or destination texture location");
+        return;
+    }
+
+    // Get the underlying D3D11 resources
+    ID3D11Resource* d3d11SrcResource = nullptr;
+    ID3D11Resource* d3d11DstResource = nullptr;
+
+    HRESULT hr = pSrc->pResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11SrcResource);
+    if (FAILED(hr)) {
+        ERR("Failed to get D3D11 source resource");
+        return;
+    }
+
+    hr = pDst->pResource->QueryInterface(__uuidof(ID3D11Resource), (void**)&d3d11DstResource);
+    if (FAILED(hr)) {
+        d3d11SrcResource->Release();
+        ERR("Failed to get D3D11 destination resource");
+        return;
+    }
+
+    // Convert D3D12 box to D3D11 box if provided
+    D3D11_BOX d3d11SrcBox = {};
+    if (pSrcBox) {
+        d3d11SrcBox.left = pSrcBox->left;
+        d3d11SrcBox.right = pSrcBox->right;
+        d3d11SrcBox.top = pSrcBox->top;
+        d3d11SrcBox.bottom = pSrcBox->bottom;
+        d3d11SrcBox.front = pSrcBox->front;
+        d3d11SrcBox.back = pSrcBox->back;
+    }
+
+    // Copy the texture region
+    m_context->CopySubresourceRegion(
+        d3d11DstResource, pDst->SubresourceIndex, DstX, DstY, DstZ,
+        d3d11SrcResource, pSrc->SubresourceIndex, pSrcBox ? &d3d11SrcBox : nullptr);
+
+    // Clean up
+    d3d11SrcResource->Release();
+    d3d11DstResource->Release();
+}
+
+void WrappedD3D12ToD3D11CommandList::DrawInstanced(
     UINT VertexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation,
     UINT StartInstanceLocation) {
     TRACE("WrappedD3D12ToD3D11CommandList::DrawInstanced: %u, %u, %u, %u", VertexCountPerInstance,
@@ -455,7 +646,7 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::DrawInstanced(
                              StartVertexLocation, StartInstanceLocation);
 }
 
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::DrawIndexedInstanced(
+void WrappedD3D12ToD3D11CommandList::DrawIndexedInstanced(
     UINT IndexCountPerInstance, UINT InstanceCount, UINT StartIndexLocation,
     INT BaseVertexLocation, UINT StartInstanceLocation) {
     TRACE("DrawIndexedInstanced: %u, %u, %u, %d, %u", IndexCountPerInstance,
@@ -466,7 +657,7 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::DrawIndexedInstanced(
                                     StartInstanceLocation);
 }
 
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::Dispatch(UINT ThreadGroupCountX,
+void WrappedD3D12ToD3D11CommandList::Dispatch(UINT ThreadGroupCountX,
                                                   UINT ThreadGroupCountY,
                                                   UINT ThreadGroupCountZ) {
     TRACE("WrappedD3D12ToD3D11CommandList::Dispatch: %u, %u, %u", ThreadGroupCountX, ThreadGroupCountY,
@@ -475,30 +666,6 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::Dispatch(UINT ThreadGroup
                         ThreadGroupCountZ);
 }
 
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::CopyBufferRegion(
-    ID3D12Resource* pDstBuffer, UINT64 DstOffset, ID3D12Resource* pSrcBuffer,
-    UINT64 SrcOffset, UINT64 NumBytes) {
-    TRACE("WrappedD3D12ToD3D11CommandList::CopyBufferRegion: %p, %llu, %p, %llu, %llu", pDstBuffer, DstOffset,
-          pSrcBuffer, SrcOffset, NumBytes);
-    // TODO: Implement buffer copy
-    FIXME("Buffer copy not implemented yet.");
-}
-
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::CopyTextureRegion(
-    const D3D12_TEXTURE_COPY_LOCATION* pDst, UINT DstX, UINT DstY, UINT DstZ,
-    const D3D12_TEXTURE_COPY_LOCATION* pSrc, const D3D12_BOX* pSrcBox) {
-    TRACE("WrappedD3D12ToD3D11CommandList::CopyTextureRegion: %p, %u, %u, %u, %p, %p", pDst, DstX, DstY, DstZ,
-          pSrc, pSrcBox);
-    // TODO: Implement texture copy
-    FIXME("Texture copy not implemented yet.");
-}
-
-void STDMETHODCALLTYPE WrappedD3D12ToD3D11CommandList::ResourceBarrier(
-    UINT NumBarriers, const D3D12_RESOURCE_BARRIER* pBarriers) {
-    TRACE("WrappedD3D12ToD3D11CommandList::ResourceBarrier: %u, %p", NumBarriers, pBarriers);
-    // D3D11 handles resource states automatically, so we can ignore barriers
-    TRACE("Ignoring %u resource barriers.", NumBarriers);
-}
 
 HRESULT WrappedD3D12ToD3D11CommandList::GetD3D11CommandList(ID3D11CommandList** ppCommandList) {
     TRACE("WrappedD3D12ToD3D11CommandList::GetD3D11CommandList(%p)", ppCommandList);
@@ -525,6 +692,13 @@ HRESULT WrappedD3D12ToD3D11CommandList::GetD3D11CommandList(ID3D11CommandList** 
 
     m_d3d11CommandList.CopyTo(ppCommandList);
     return S_OK;
+}
+
+void WrappedD3D12ToD3D11CommandList::ResourceBarrier(
+    UINT NumBarriers, const D3D12_RESOURCE_BARRIER* pBarriers) {
+    TRACE("ResourceBarrier: %u, %p", NumBarriers, pBarriers);
+    // D3D11 handles resource states automatically, so we can ignore barriers
+    TRACE("Ignoring %u resource barriers.", NumBarriers);
 }
 
 }  // namespace dxiided

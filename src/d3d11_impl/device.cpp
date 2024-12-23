@@ -5,6 +5,7 @@
 #include <dxgi1_2.h>
 
 #include "d3d11_impl/command_allocator.hpp"
+#include "d3d11_impl/command_list.hpp"
 #include "d3d11_impl/descriptor_heap.hpp"
 #include "d3d11_impl/device_features.hpp"
 #include "d3d11_impl/resource.hpp"
@@ -242,9 +243,19 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommandList(
     UINT nodeMask, D3D12_COMMAND_LIST_TYPE type,
     ID3D12CommandAllocator* pCommandAllocator,
     ID3D12PipelineState* pInitialState, REFIID riid, void** ppCommandList) {
-    // TODO: Implement command list creation
-    FIXME("Command list creation not implemented yet.");
-    return E_NOTIMPL;
+    TRACE("WrappedD3D12ToD3D11Device::CreateCommandList(%u, %d, %p, %p, %s, %p)",
+          nodeMask, type, pCommandAllocator, pInitialState,
+          debugstr_guid(&riid).c_str(), ppCommandList);
+
+    // Return error if invalid parameters
+    if (!ppCommandList) {
+        ERR("Invalid command list pointer.");
+        return E_INVALIDARG;
+    }
+
+    // Create command list using the static Create method
+    return WrappedD3D12ToD3D11CommandList::Create(this, type, pCommandAllocator,
+                                                 pInitialState, riid, ppCommandList);
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateDescriptorHeap(
@@ -789,8 +800,28 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommittedResource(
         return E_INVALIDARG;
     }
 
+    // Create a local copy of the descriptor that we can modify
+    D3D12_RESOURCE_DESC localDesc = *pDesc;
+    
+    if (localDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER && localDesc.Width == 0) {
+        WARN("Buffer width is 0, using 1");
+        localDesc.Width = 1;
+    }
+
+    // Validate resource dimensions
+    if (localDesc.Width == 0 && localDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
+        ERR("Invalid resource width: 0 for non-buffer resource");
+        return E_INVALIDARG;
+    }
+
+    if (localDesc.Height == 0 && localDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER && 
+        localDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE1D) {
+        ERR("Invalid resource height: 0 for non-buffer/1D resource");
+        return E_INVALIDARG;
+    }
+
     return WrappedD3D12ToD3D11Resource::Create(
-        this, pHeapProperties, HeapFlags, pDesc,
+        this, pHeapProperties, HeapFlags, &localDesc,
         InitialResourceState, pOptimizedClearValue,
         riidResource, ppvResource);
 }
