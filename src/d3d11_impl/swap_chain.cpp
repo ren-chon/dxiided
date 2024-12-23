@@ -48,7 +48,7 @@ HRESULT WrappedD3D12ToD3D11SwapChain::Create(
     if (using_dxvk) {
         // DXVK: Use DISCARD with single buffer
         d3d11_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-        d3d11_desc.BufferCount = 1;  // Force single buffer for DXVK internally
+        d3d11_desc.BufferCount = 2;  // Force single buffer for DXVK internally
         TRACE("Using DXVK mode: Single buffer with DXGI_SWAP_EFFECT_DISCARD");
     } else {
         // WineD3D: Use FLIP_SEQUENTIAL with requested buffer count
@@ -114,8 +114,7 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
     }
 
     TRACE(
-        "Swap chain desc - BufferCount: %u, Width: %u, Height: %u, Format: "
-        "%d",
+        "Swap chain desc - BufferCount: %u, Width: %u, Height: %u, Format: %d",
         desc.BufferCount, desc.BufferDesc.Width, desc.BufferDesc.Height,
         desc.BufferDesc.Format);
 
@@ -137,53 +136,41 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
     m_backbuffers.reserve(desc.BufferCount);
     m_renderTargetViews.reserve(desc.BufferCount);
 
-    // Create RTVs for all buffers
+    // Create D3D11 textures and RTVs for all buffers
     for (UINT i = 0; i < desc.BufferCount; i++) {
-        TRACE("Attempting to get buffer %u of %u", i, desc.BufferCount);
+        TRACE("Creating buffer %u of %u", i, desc.BufferCount);
+
+        // Create D3D11 texture for the back buffer
+        D3D11_TEXTURE2D_DESC texDesc = {};
+        texDesc.Width = m_width;
+        texDesc.Height = m_height;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = m_format;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.SampleDesc.Quality = 0;
+        texDesc.Usage = D3D11_USAGE_DEFAULT;
+        texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        texDesc.CPUAccessFlags = 0;
+        texDesc.MiscFlags = 0;
 
         Microsoft::WRL::ComPtr<ID3D11Texture2D> buffer;
-        hr = m_base_swapchain->GetBuffer(
-            i, __uuidof(ID3D11Texture2D),
-            reinterpret_cast<void**>(buffer.GetAddressOf()));
-
+        hr = m_device->GetD3D11Device()->CreateTexture2D(&texDesc, nullptr, &buffer);
         if (FAILED(hr)) {
-            ERR("Failed to get back buffer %u, hr %#x - this is required for proper operation",
-                i, hr);
-            // Try to get more information about the failure
-            D3D11_TEXTURE2D_DESC desc_attempt = {};
-            desc_attempt.Width = m_width;
-            desc_attempt.Height = m_height;
-            desc_attempt.MipLevels = 1;
-            desc_attempt.ArraySize = 1;
-            desc_attempt.Format = m_format;
-            desc_attempt.SampleDesc.Count = 1;
-            desc_attempt.SampleDesc.Quality = 0;
-            desc_attempt.Usage = D3D11_USAGE_DEFAULT;
-            desc_attempt.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-            desc_attempt.CPUAccessFlags = 0;
-            desc_attempt.MiscFlags = 0;
-
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> test_buffer;
-            HRESULT test_hr = m_device->GetD3D11Device()->CreateTexture2D(&desc_attempt, nullptr, &test_buffer);
-            ERR("Test texture creation %s (hr: %#x)", SUCCEEDED(test_hr) ? "succeeded" : "failed", test_hr);
-            
-            ReleaseBackBuffers();  // Clean up any buffers we did get
-            return hr;  // Fail if we can't get all buffers
+            ERR("Failed to create back buffer %u texture, hr %#x", i, hr);
+            ReleaseBackBuffers();
+            return hr;
         }
 
-        // Get original buffer description
-        D3D11_TEXTURE2D_DESC tex_desc;
-        buffer->GetDesc(&tex_desc);
-
         // Create RTV description
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {};
-        rtv_desc.Format = tex_desc.Format;
-        rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        rtv_desc.Texture2D.MipSlice = 0;
+        D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+        rtvDesc.Format = texDesc.Format;
+        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        rtvDesc.Texture2D.MipSlice = 0;
 
         // Create render target view
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
-        hr = m_device->GetD3D11Device()->CreateRenderTargetView(buffer.Get(), &rtv_desc, &rtv);
+        hr = m_device->GetD3D11Device()->CreateRenderTargetView(buffer.Get(), &rtvDesc, &rtv);
         if (FAILED(hr)) {
             ERR("Failed to create RTV for back buffer %u, hr %#x.", i, hr);
             ReleaseBackBuffers();
@@ -191,89 +178,101 @@ HRESULT WrappedD3D12ToD3D11SwapChain::InitBackBuffers() {
         }
 
         TRACE(
-            "Back buffer %u validated - Width: %u, Height: %u, Format: %d, "
-            "ArraySize: %u, BindFlags: %#x",
-            i, tex_desc.Width, tex_desc.Height, tex_desc.Format,
-            tex_desc.ArraySize, tex_desc.BindFlags);
+            "Back buffer %u created - Width: %u, Height: %u, Format: %d",
+            i, texDesc.Width, texDesc.Height, texDesc.Format);
 
         m_backbuffers.push_back(std::move(buffer));
         m_renderTargetViews.push_back(std::move(rtv));
         TRACE("Created back buffer %u with RTV", i);
     }
 
-    // Update actual buffer count
-    m_buffer_count = static_cast<UINT>(m_backbuffers.size());
-
-    TRACE("Successfully initialized %u back buffers ", m_buffer_count);
     return S_OK;
 }
 
+void WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers() {
+    TRACE("WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers");
+    
+    // Release render target views first since they reference the back buffers
+    for (auto& rtv : m_renderTargetViews) {
+        if (rtv) {
+            rtv->Release();
+        }
+    }
+    m_renderTargetViews.clear();
+
+    // Then release back buffers
+    for (auto& buffer : m_backbuffers) {
+        if (buffer) {
+            buffer->Release();
+        }
+    }
+    m_backbuffers.clear();
+}
+
 HRESULT WrappedD3D12ToD3D11SwapChain::GetBuffer(UINT Buffer, REFIID riid, void** ppSurface) {
-    TRACE("WrappedD3D12ToD3D11SwapChain::GetBuffer %u, %s, %p", Buffer,
-          debugstr_guid(&riid).c_str(), ppSurface);
+    TRACE("WrappedD3D12ToD3D11SwapChain::GetBuffer called with Buffer=%u, riid=%s", 
+          Buffer, debugstr_guid(&riid).c_str());
 
-    // When using DXVK with single buffer mode, map all buffer indices to buffer 0
-    UINT actual_buffer = (m_buffer_count == 1) ? 0 : Buffer;
-
-    if (actual_buffer >= m_buffer_count || !ppSurface) {
-        ERR("Invalid buffer index %u (buffer_count=%u) or null surface pointer",
-            Buffer, m_buffer_count);
-        return DXGI_ERROR_INVALID_CALL;
+    if (!ppSurface) {
+        return E_INVALIDARG;
     }
 
     *ppSurface = nullptr;
 
-    if (riid == __uuidof(ID3D11Texture2D)) {
-        TRACE("Returning D3D11 texture for buffer %u (mapped from request for buffer %u)", 
-              actual_buffer, Buffer);
-        m_backbuffers[actual_buffer]->AddRef();
-        *ppSurface = m_backbuffers[actual_buffer].Get();
-        return S_OK;
+    if (Buffer >= m_backbuffers.size()) {
+        ERR("Buffer index %u is out of range (max: %zu)", Buffer, m_backbuffers.size());
+        return DXGI_ERROR_INVALID_CALL;
     }
 
-    // Try to get the underlying D3D12 resource from the base swapchain
-    if (riid == __uuidof(ID3D12Resource)) {
-        TRACE("Game requesting D3D12 resource for backbuffer");
-
-        // Create resource description for the back buffer
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width = m_width;
-        desc.Height = m_height;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Format = m_format;
-        desc.SampleDesc = {1, 0};
-        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-        TRACE("Back buffer description: Width: %u, Height: %u, Format: %d",
-              desc.Width, desc.Height, desc.Format);
-
-        // Set up heap properties for the back buffer
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-        heapProps.CreationNodeMask = 1;
-        heapProps.VisibleNodeMask = 1;
-
-        // Create D3D11Resource wrapper around the back buffer
-        return WrappedD3D12ToD3D11Resource::Create(
-            m_device, &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-            D3D12_RESOURCE_STATE_COMMON,
-            nullptr,  // No optimized clear value for swap chain
-            riid, ppSurface);
+    // Get the D3D11 texture
+    ID3D11Texture2D* d3d11Texture = m_backbuffers[Buffer].Get();
+    if (!d3d11Texture) {
+        ERR("Back buffer %u is null", Buffer);
+        return E_FAIL;
     }
-    TRACE("other interface");
-    // For any other interface, try querying our backbuffer
-    return m_backbuffers[actual_buffer]->QueryInterface(riid, ppSurface);
-}
 
+    // Get texture description for D3D12 resource creation
+    D3D11_TEXTURE2D_DESC d3d11Desc;
+    d3d11Texture->GetDesc(&d3d11Desc);
 
-void WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers() {
-    TRACE("WrappedD3D12ToD3D11SwapChain::ReleaseBackBuffers");
-    m_backbuffers.clear();
-    m_renderTargetViews.clear();
+    // Create D3D12 resource description
+    D3D12_RESOURCE_DESC d3d12Desc = {};
+    d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    d3d12Desc.Alignment = 0;
+    d3d12Desc.Width = d3d11Desc.Width;
+    d3d12Desc.Height = d3d11Desc.Height;
+    d3d12Desc.DepthOrArraySize = d3d11Desc.ArraySize;
+    d3d12Desc.MipLevels = d3d11Desc.MipLevels;
+    d3d12Desc.Format = d3d11Desc.Format;
+    d3d12Desc.SampleDesc = d3d11Desc.SampleDesc;
+    d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    // Default heap properties for swap chain resources
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    heapProps.CreationNodeMask = 1;
+    heapProps.VisibleNodeMask = 1;
+
+    // Create wrapped D3D12 resource
+    void* resource = nullptr;
+    HRESULT hr = WrappedD3D12ToD3D11Resource::Create(
+        m_device,
+        d3d11Texture,
+        &d3d12Desc,
+        D3D12_RESOURCE_STATE_PRESENT,
+        riid,
+        &resource);
+
+    if (FAILED(hr)) {
+        ERR("Failed to create wrapped D3D12 resource for back buffer %u, hr %#x", Buffer, hr);
+        return hr;
+    }
+
+    *ppSurface = resource;
+    return S_OK;
 }
 
 WrappedD3D12ToD3D11SwapChain::WrappedD3D12ToD3D11SwapChain(
@@ -340,11 +339,52 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11SwapChain::Present(UINT SyncInterva
               frame_count, SyncInterval, Flags);
     }
 
+    // Get current back buffer index
+    UINT currentIndex = 0;
+    if (Microsoft::WRL::ComPtr<IDXGISwapChain3> swapchain3; 
+        SUCCEEDED(m_base_swapchain->QueryInterface(__uuidof(IDXGISwapChain3), 
+                                                 (void**)&swapchain3))) {
+        currentIndex = swapchain3->GetCurrentBackBufferIndex();
+    }
+
+    // Ensure we have valid back buffers
+    if (currentIndex >= m_backbuffers.size() || !m_backbuffers[currentIndex]) {
+        ERR("Invalid back buffer index %u (total buffers: %zu)", 
+            currentIndex, m_backbuffers.size());
+        return E_FAIL;
+    }
+
+    // Get D3D11 immediate context
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
+    m_device->GetD3D11Device()->GetImmediateContext(&context);
+
+    // Transition from D3D12_RESOURCE_STATE_RENDER_TARGET to D3D12_RESOURCE_STATE_PRESENT
+    // In D3D11 this means:
+    // 1. Flush any pending rendering
+    context->Flush();
+
+    // 2. Ensure back buffer is ready for presentation
+    if (Flags & DXGI_PRESENT_DO_NOT_WAIT) {
+        // If DO_NOT_WAIT is set, we don't wait for GPU
+        // This maps to D3D12's DXGI_PRESENT_DO_NOT_WAIT
+    } else {
+        // Wait for GPU to complete all work
+        // This ensures the transition to PRESENT state is complete
+        context->Flush();
+    }
+
+    // Present the back buffer
     HRESULT hr = m_base_swapchain->Present(SyncInterval, Flags);
     if (FAILED(hr)) {
         ERR("Present failed, hr %#x", hr);
+        return hr;
     }
-    return hr;
+
+    // After presentation, the back buffer is automatically transitioned to 
+    // D3D12_RESOURCE_STATE_COMMON in D3D12
+    // In D3D11, we don't need to do anything as the runtime handles this
+
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE

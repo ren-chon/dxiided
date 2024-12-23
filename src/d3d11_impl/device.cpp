@@ -484,16 +484,22 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateShaderResourceView(
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
     TRACE("WrappedD3D12ToD3D11Device::CreateShaderResourceView called");
     TRACE("  Resource: %p", pResource);
-    TRACE("  Format: %p", pDesc->Format);
-    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
-    TRACE("  Shader4ComponentMapping: %d", pDesc->Shader4ComponentMapping);
-    TRACE("  Buffer FirstElement: %d", pDesc->Buffer.FirstElement);
-    TRACE("  Buffer NumElements: %d", pDesc->Buffer.NumElements);
-    TRACE("  Texture2D MipLevels: %d", pDesc->Texture2D.MipLevels);
+    if (pDesc) {
+        TRACE("  Format: %p", pDesc->Format);
+        TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+        TRACE("  Shader4ComponentMapping: %d", pDesc->Shader4ComponentMapping);
+        TRACE("  Buffer FirstElement: %u", pDesc->Buffer.FirstElement);
+        TRACE("  Buffer NumElements: %u", pDesc->Buffer.NumElements);
+        TRACE("  Texture2D MipLevels: %u", pDesc->Texture2D.MipLevels);
+    }
     TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for shader resource view.");
+        // Some D3D12 applications create placeholder SRVs with null resources
+        // Store a null view in the descriptor
+        TRACE("Creating placeholder SRV for null resource");
+        auto* descriptor = reinterpret_cast<ID3D11ShaderResourceView**>(DestDescriptor.ptr);
+        *descriptor = nullptr;
         return;
     }
 
@@ -583,12 +589,18 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateUnorderedAccessView(
     TRACE("WrappedD3D12ToD3D11Device::CreateUnorderedAccessView called");
     TRACE("  Resource: %p", pResource);
     TRACE("  CounterResource: %p", pCounterResource);
-    TRACE("  Format: %p", pDesc->Format);
-    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    if (pDesc) {
+        TRACE("  Format: %p", pDesc->Format);
+        TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    }
     TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for unordered access view.");
+        // Some D3D12 applications create placeholder UAVs with null resources
+        // Store a null view in the descriptor
+        TRACE("Creating placeholder UAV for null resource");
+        auto* descriptor = reinterpret_cast<ID3D11UnorderedAccessView**>(DestDescriptor.ptr);
+        *descriptor = nullptr;
         return;
     }
 
@@ -617,12 +629,16 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateRenderTargetView(
     D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
     TRACE("WrappedD3D12ToD3D11Device::CreateRenderTargetView called");
     TRACE("  Resource: %p", pResource);
-    TRACE("  Format: %p", pDesc->Format);
-    TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    if (pDesc) {
+        TRACE("  Format: %p", pDesc->Format);
+        TRACE("  ViewDimension: %d", pDesc->ViewDimension);
+    }
     TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
 
     if (!pResource) {
-        ERR("No resource provided for render target view.");
+        // Some D3D12 applications create placeholder RTVs with null resources
+        // Just store a null descriptor for now
+        TRACE("Storing null descriptor for placeholder RTV");
         return;
     }
 
@@ -640,7 +656,7 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateRenderTargetView(
         return;
     }
 
-    // Store view in descriptor heap
+    TRACE("Store view in descriptor heap");
     auto* descriptor =
         reinterpret_cast<ID3D11RenderTargetView**>(DestDescriptor.ptr);
     *descriptor = rtv.Detach();
@@ -1005,10 +1021,9 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::SetStablePowerState(BOOL En
     return E_NOTIMPL;
 }
 
-HRESULT STDMETHODCALLTYPE
-WrappedD3D12ToD3D11Device::CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC* pDesc,
-                                    ID3D12RootSignature* pRootSignature,
-                                    REFIID riid, void** ppvCommandSignature) {
+HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommandSignature(
+    const D3D12_COMMAND_SIGNATURE_DESC* pDesc, ID3D12RootSignature* pRootSignature,
+    REFIID riid, void** ppvCommandSignature) {
     TRACE("WrappedD3D12ToD3D11Device::CreateCommandSignature(%p, %p, %s, %p)", pDesc,
           pRootSignature, debugstr_guid(&riid).c_str(), ppvCommandSignature);
     return E_NOTIMPL;
