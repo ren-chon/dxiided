@@ -8,6 +8,7 @@
 #include <vector>
 #include <atomic>
 #include "common/debug.hpp"
+#include "d3d11_impl/resource.hpp"
 
 namespace dxiided {
 
@@ -242,6 +243,13 @@ class WrappedD3D12ToD3D11CommandList final : public ID3D12GraphicsCommandList {
         WrappedD3D12ToD3D11Device* device,
         D3D12_COMMAND_LIST_TYPE type,
                      Microsoft::WRL::ComPtr<ID3D11DeviceContext> context);
+
+
+    // Helper functions for resource access
+    HRESULT GetD3D11Resource(ID3D12Resource* d3d12Resource,
+                            Microsoft::WRL::ComPtr<ID3D11Resource>* ppD3D11Resource);
+    HRESULT GetD3D11Buffer(ID3D12Resource* d3d12Resource,
+                          Microsoft::WRL::ComPtr<ID3D11Buffer>* ppD3D11Buffer);
 
     WrappedD3D12ToD3D11Device* const m_device;
     D3D12_COMMAND_LIST_TYPE m_type;

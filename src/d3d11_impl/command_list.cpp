@@ -184,113 +184,87 @@ void WrappedD3D12ToD3D11CommandList::CopyBufferRegion(
     TRACE("CopyBufferRegion: %p[%llu] -> %p[%llu], size=%llu", pSrcBuffer, SrcOffset,
           pDstBuffer, DstOffset, NumBytes);
 
-    class ScopedResources {
-    public:
-        ID3D11Buffer* d3d11SrcBuffer = nullptr;
-        ID3D11Buffer* d3d11DstBuffer = nullptr;
-        ID3D11Buffer* stagingSrcBuffer = nullptr;
-        ID3D11Buffer* stagingDstBuffer = nullptr;
-        ID3D11Device* device = nullptr;
-
-        ~ScopedResources() {
-            if (stagingSrcBuffer) stagingSrcBuffer->Release();
-            if (stagingDstBuffer) stagingDstBuffer->Release();
-            if (d3d11SrcBuffer) d3d11SrcBuffer->Release();
-            if (d3d11DstBuffer) d3d11DstBuffer->Release();
-            if (device) device->Release();
-        }
-    } resources;
-
-    if (!pSrcBuffer || !pDstBuffer) {
-        ERR("Invalid source or destination buffer");
-        return;
-    }
-
-    HRESULT hr = pSrcBuffer->QueryInterface(__uuidof(ID3D11Buffer), (void**)&resources.d3d11SrcBuffer);
-    if (FAILED(hr)) {
-        ERR("Failed to get D3D11 source buffer");
-        return;
-    }
-
-    hr = pDstBuffer->QueryInterface(__uuidof(ID3D11Buffer), (void**)&resources.d3d11DstBuffer);
-    if (FAILED(hr)) {
+    // Get D3D11 buffers
+    Microsoft::WRL::ComPtr<ID3D11Buffer> d3d11DstBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> d3d11SrcBuffer;
+    
+    // Try to get the D3D11 buffers, handling both direct buffers and wrapped resources
+    if (FAILED(GetD3D11Buffer(pDstBuffer, &d3d11DstBuffer))) {
         ERR("Failed to get D3D11 destination buffer");
         return;
     }
 
-    // Create staging buffers
-    m_context->GetDevice(&resources.device);
-    if (!resources.device) {
-        ERR("Failed to get D3D11 device");
+    // For source buffer, try both ID3D11Buffer and ID3D11Resource
+    Microsoft::WRL::ComPtr<ID3D11Resource> d3d11SrcResource;
+    if (FAILED(GetD3D11Resource(pSrcBuffer, &d3d11SrcResource))) {
+        ERR("Failed to get D3D11 source resource");
         return;
     }
 
-    D3D11_BUFFER_DESC stagingDesc = {};
-    stagingDesc.ByteWidth = static_cast<UINT>(NumBytes);
-    stagingDesc.Usage = D3D11_USAGE_STAGING;
-    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
-    stagingDesc.BindFlags = 0;
-    stagingDesc.MiscFlags = 0;
-    stagingDesc.StructureByteStride = 0;
-
-    hr = resources.device->CreateBuffer(&stagingDesc, nullptr, &resources.stagingSrcBuffer);
-    if (FAILED(hr)) {
-        ERR("Failed to create source staging buffer");
+    if (FAILED(d3d11SrcResource.As(&d3d11SrcBuffer))) {
+        ERR("Source resource is not a buffer");
         return;
     }
 
-    hr = resources.device->CreateBuffer(&stagingDesc, nullptr, &resources.stagingDstBuffer);
-    if (FAILED(hr)) {
-        ERR("Failed to create destination staging buffer");
+    // Get buffer descriptions
+    D3D11_BUFFER_DESC srcDesc = {}, dstDesc = {};
+    d3d11SrcBuffer->GetDesc(&srcDesc);
+    d3d11DstBuffer->GetDesc(&dstDesc);
+    
+    TRACE("  Source buffer: size=%u, usage=%d, bind=%#x", 
+          srcDesc.ByteWidth, srcDesc.Usage, srcDesc.BindFlags);
+    TRACE("  Dest buffer: size=%u, usage=%d, bind=%#x", 
+          dstDesc.ByteWidth, dstDesc.Usage, dstDesc.BindFlags);
+
+    // Verify offsets and sizes
+    if (SrcOffset + NumBytes > srcDesc.ByteWidth || 
+        DstOffset + NumBytes > dstDesc.ByteWidth) {
+        ERR("Copy region out of bounds");
         return;
     }
 
-    // Copy from source to staging
-    D3D11_BOX srcBox = {};
-    srcBox.left = static_cast<UINT>(SrcOffset);
-    srcBox.right = static_cast<UINT>(SrcOffset + NumBytes);
-    srcBox.top = 0;
-    srcBox.bottom = 1;
-    srcBox.front = 0;
-    srcBox.back = 1;
+    // Create staging buffer if needed for partial copies
+    if (SrcOffset > 0 || DstOffset > 0 || NumBytes != srcDesc.ByteWidth) {
+        TRACE("Creating staging buffer for partial copy");
+        D3D11_BUFFER_DESC stagingDesc = {};
+        stagingDesc.ByteWidth = static_cast<UINT>(NumBytes);
+        stagingDesc.Usage = D3D11_USAGE_STAGING;
+        stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+        
+        Microsoft::WRL::ComPtr<ID3D11Buffer> stagingBuffer;
+        if (FAILED(m_device->GetD3D11Device()->CreateBuffer(&stagingDesc, nullptr, &stagingBuffer))) {
+            ERR("Failed to create staging buffer");
+            return;
+        }
 
-    m_context->CopySubresourceRegion(resources.stagingSrcBuffer, 0, 0, 0, 0, 
-                                    resources.d3d11SrcBuffer, 0, &srcBox);
+        // Copy source to staging
+        D3D11_BOX srcBox = {};
+        srcBox.left = static_cast<UINT>(SrcOffset);
+        srcBox.right = static_cast<UINT>(SrcOffset + NumBytes);
+        srcBox.top = 0;
+        srcBox.bottom = 1;
+        srcBox.front = 0;
+        srcBox.back = 1;
 
-    // Map staging buffers and copy data
-    D3D11_MAPPED_SUBRESOURCE srcMapped = {};
-    hr = m_context->Map(resources.stagingSrcBuffer, 0, D3D11_MAP_READ, 0, &srcMapped);
-    if (FAILED(hr)) {
-        ERR("Failed to map source staging buffer");
-        return;
+        m_context->CopySubresourceRegion(stagingBuffer.Get(), 0, 0, 0, 0,
+                                       d3d11SrcBuffer.Get(), 0, &srcBox);
+
+        // Copy staging to destination
+        D3D11_BOX dstBox = {};
+        dstBox.left = 0;
+        dstBox.right = static_cast<UINT>(NumBytes);
+        dstBox.top = 0;
+        dstBox.bottom = 1;
+        dstBox.front = 0;
+        dstBox.back = 1;
+
+        m_context->CopySubresourceRegion(d3d11DstBuffer.Get(), 0, 
+                                       static_cast<UINT>(DstOffset), 0, 0,
+                                       stagingBuffer.Get(), 0, &dstBox);
+    } else {
+        // Direct copy for full buffer copies
+        m_context->CopyResource(d3d11DstBuffer.Get(), d3d11SrcBuffer.Get());
     }
-
-    D3D11_MAPPED_SUBRESOURCE dstMapped = {};
-    hr = m_context->Map(resources.stagingDstBuffer, 0, D3D11_MAP_WRITE, 0, &dstMapped);
-    if (FAILED(hr)) {
-        m_context->Unmap(resources.stagingSrcBuffer, 0);
-        ERR("Failed to map destination staging buffer");
-        return;
-    }
-
-    // Copy the data
-    memcpy(dstMapped.pData, srcMapped.pData, static_cast<size_t>(NumBytes));
-
-    // Unmap buffers
-    m_context->Unmap(resources.stagingSrcBuffer, 0);
-    m_context->Unmap(resources.stagingDstBuffer, 0);
-
-    // Copy from staging to destination
-    D3D11_BOX dstBox = {};
-    dstBox.left = 0;
-    dstBox.right = static_cast<UINT>(NumBytes);
-    dstBox.top = 0;
-    dstBox.bottom = 1;
-    dstBox.front = 0;
-    dstBox.back = 1;
-
-    m_context->CopySubresourceRegion(resources.d3d11DstBuffer, 0, static_cast<UINT>(DstOffset), 0, 0,
-                                    resources.stagingDstBuffer, 0, &dstBox);
 }
 
 void WrappedD3D12ToD3D11CommandList::CopyTiles(
@@ -860,4 +834,33 @@ void WrappedD3D12ToD3D11CommandList::ClearState(ID3D12PipelineState* pPipelineSt
     m_context->ClearState();
 }
 
+HRESULT WrappedD3D12ToD3D11CommandList::GetD3D11Resource(
+    ID3D12Resource* d3d12Resource,
+    Microsoft::WRL::ComPtr<ID3D11Resource>* ppD3D11Resource) {
+    
+    if (!d3d12Resource || !ppD3D11Resource) {
+        return E_INVALIDARG;
+    }
+
+    auto* wrappedResource = static_cast<WrappedD3D12ToD3D11Resource*>(d3d12Resource);
+    *ppD3D11Resource = wrappedResource->GetD3D11Resource();
+    return S_OK;
+}
+
+HRESULT WrappedD3D12ToD3D11CommandList::GetD3D11Buffer(
+    ID3D12Resource* d3d12Resource,
+    Microsoft::WRL::ComPtr<ID3D11Buffer>* ppD3D11Buffer) {
+    
+    if (!d3d12Resource || !ppD3D11Buffer) {
+        return E_INVALIDARG;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D11Resource> d3d11Resource;
+    HRESULT hr = GetD3D11Resource(d3d12Resource, &d3d11Resource);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    return d3d11Resource.As(ppD3D11Buffer);
+}
 }  // namespace dxiided

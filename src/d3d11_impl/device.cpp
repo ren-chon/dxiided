@@ -535,36 +535,29 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateShaderResourceView(
     }
 
     TRACE("Creating SRV with format %d, dimension %d", pDesc->Format, pDesc->ViewDimension);
-
-    // Create default SRV description if none provided
+    
     D3D11_SHADER_RESOURCE_VIEW_DESC d3d11Desc = {};
-    if (pDesc) {
-        TRACE("pDesc provided");
-        // Convert D3D12 description to D3D11
-        d3d11Desc.Format = static_cast<DXGI_FORMAT>(pDesc->Format);
-        d3d11Desc.ViewDimension =
-            static_cast<D3D11_SRV_DIMENSION>(pDesc->ViewDimension);
+    d3d11Desc.Format = static_cast<DXGI_FORMAT>(pDesc->Format);
 
-        switch (pDesc->ViewDimension) {
-            case D3D12_SRV_DIMENSION_TEXTURE2D:
-                TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched");
-                d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
-                d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;  // Use D3D12's requested mip levels
-                break;
-            default:
-                ERR("Unsupported view dimension: %d", pDesc->ViewDimension);
-                return;
+    switch (pDesc->ViewDimension) {
+        case D3D12_SRV_DIMENSION_BUFFER:
+        case D3D12_SRV_DIMENSION_TEXTURE1D: {  // Handle 1D textures that are actually buffers
+            TRACE("Creating buffer SRV, elements: %u", pDesc->Buffer.NumElements);
+            d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+            d3d11Desc.Buffer.FirstElement = pDesc->Buffer.FirstElement;
+            d3d11Desc.Buffer.NumElements = pDesc->Buffer.NumElements;
+            break;
         }
-    } else {
-        TRACE("No pDesc provided");
-        // Get resource properties
-        D3D12_RESOURCE_DESC resDesc = {};
-        pResource->GetDesc(&resDesc);
-
-        d3d11Desc.Format = static_cast<DXGI_FORMAT>(resDesc.Format);
-        d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        d3d11Desc.Texture2D.MostDetailedMip = 0;
-        d3d11Desc.Texture2D.MipLevels = -1;  // Use all mips
+        case D3D12_SRV_DIMENSION_TEXTURE2D: {
+            TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched");
+            d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
+            d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;  // Use D3D12's requested mip levels
+            break;
+        }
+        default:
+            ERR("Unsupported view dimension: %d", pDesc->ViewDimension);
+            return;
     }
 
     TRACE("Store view in descriptor heap");
