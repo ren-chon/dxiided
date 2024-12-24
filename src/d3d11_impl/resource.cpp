@@ -419,40 +419,20 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
 }
 
 DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
-    // For buffer resources with UNKNOWN format, default to R32_FLOAT
-    if (format == DXGI_FORMAT_UNKNOWN) {
-        return DXGI_FORMAT_R32_FLOAT;
-    }
-
-    // Handle typed buffer formats
     switch (format) {
-        case DXGI_FORMAT_R32_TYPELESS:
-        case DXGI_FORMAT_R32_FLOAT:
-        case DXGI_FORMAT_R32_UINT:
-        case DXGI_FORMAT_R32_SINT:
+        // Keep original format for common UNORM/SNORM formats
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_SNORM:
+        case DXGI_FORMAT_R16G16B16A16_SNORM:
             return format;
             
-        case DXGI_FORMAT_R16_TYPELESS:
-        case DXGI_FORMAT_R16_FLOAT:
-        case DXGI_FORMAT_R16_UNORM:
-        case DXGI_FORMAT_R16_UINT:
-        case DXGI_FORMAT_R16_SNORM:
-        case DXGI_FORMAT_R16_SINT:
-            return format;
-            
-        case DXGI_FORMAT_R8_TYPELESS:
-        case DXGI_FORMAT_R8_UNORM:
-        case DXGI_FORMAT_R8_UINT:
-        case DXGI_FORMAT_R8_SNORM:
-        case DXGI_FORMAT_R8_SINT:
-            return format;
-            
-        // Add more format mappings as needed
-        
+        // Add other format mappings as needed
         default:
-            // For unknown/unsupported formats, fall back to R32_FLOAT
-            WARN("Unsupported format %d, falling back to R32_FLOAT", format);
-            return DXGI_FORMAT_R32_FLOAT;
+            WARN("Unsupported format %d, using original format", format);
+            return format;
     }
 }
 
@@ -670,28 +650,31 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     
     // Only buffers should have GPU addresses
     if (m_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
-        ERR("GetGPUVirtualAddress called on non-buffer resource type %d, width: %llu", 
-            m_desc.Dimension, m_desc.Width);
+        ERR("GetGPUVirtualAddress called on non-buffer resource type %d", m_desc.Dimension);
         return 0;
     }
 
-    // Get D3D11 buffer description for debugging
-    D3D11_BUFFER_DESC bufferDesc = {};
-    Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-    if (SUCCEEDED(m_resource.As(&buffer))) {
-        buffer->GetDesc(&bufferDesc);
-        TRACE("  Buffer info - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
-              bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
+    // Always allocate GPU address for buffers if not already allocated
+    if (!m_gpuAddress) {
+        D3D11_BUFFER_DESC bufferDesc = {};
+        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+        
+        if (SUCCEEDED(m_resource.As(&buffer))) {
+            buffer->GetDesc(&bufferDesc);
+            TRACE("Allocating GPU address for buffer - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
+                  bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
+                  
+            // Allocate GPU address for all buffers
+            m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
+        }
     }
 
-    if (m_gpuAddress < 0x100000ULL) {
-        ERR("Invalid GPU address %llu for resource %p", m_gpuAddress, this);
-        ERR("  Buffer bind flags: %#x, size: %u", bufferDesc.BindFlags, bufferDesc.ByteWidth);
+    if (!m_gpuAddress) {
+        ERR("Failed to allocate GPU address for buffer resource %p", this);
         return 0;
     }
 
-    TRACE("  m_gpuAddress: %llu, resource type: %d, width: %llu", 
-          m_gpuAddress, m_desc.Dimension, m_desc.Width);
+    TRACE("Returning GPU address %llu for buffer resource %p", m_gpuAddress, this);
     return m_gpuAddress;
 }
 
