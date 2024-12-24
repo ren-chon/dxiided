@@ -169,16 +169,96 @@ WrappedD3D12ToD3D11PipelineState::WrappedD3D12ToD3D11PipelineState(
 HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
     TRACE("Initializing graphics pipeline state");
+    TRACE("D3D12_GRAPHICS_PIPELINE_STATE_DESC:");
+    TRACE("  pRootSignature: %p", pDesc->pRootSignature);
+    TRACE("  VS: {pShaderBytecode: %p, BytecodeLength: %zu}", pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength);
+    TRACE("  PS: {pShaderBytecode: %p, BytecodeLength: %zu}", pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength);
+    TRACE("  DS: {pShaderBytecode: %p, BytecodeLength: %zu}", pDesc->DS.pShaderBytecode, pDesc->DS.BytecodeLength);
+    TRACE("  HS: {pShaderBytecode: %p, BytecodeLength: %zu}", pDesc->HS.pShaderBytecode, pDesc->HS.BytecodeLength);
+    TRACE("  GS: {pShaderBytecode: %p, BytecodeLength: %zu}", pDesc->GS.pShaderBytecode, pDesc->GS.BytecodeLength);
+    TRACE("  StreamOutput: {pSODeclaration: %p, NumEntries: %u, pBufferStrides: %p, NumStrides: %u, RasterizedStream: %u}", 
+          pDesc->StreamOutput.pSODeclaration, pDesc->StreamOutput.NumEntries, pDesc->StreamOutput.pBufferStrides, 
+          pDesc->StreamOutput.NumStrides, pDesc->StreamOutput.RasterizedStream);
+    TRACE("  BlendState: {AlphaToCoverageEnable: %d, IndependentBlendEnable: %d}", 
+          pDesc->BlendState.AlphaToCoverageEnable, pDesc->BlendState.IndependentBlendEnable);
+    TRACE("  SampleMask: 0x%X", pDesc->SampleMask);
+    TRACE("  RasterizerState: {FillMode: %d, CullMode: %d, FrontCounterClockwise: %d, DepthBias: %d, DepthBiasClamp: %f, SlopeScaledDepthBias: %f, DepthClipEnable: %d, MultisampleEnable: %d, AntialiasedLineEnable: %d, ForcedSampleCount: %u, ConservativeRaster: %d}", 
+          pDesc->RasterizerState.FillMode, pDesc->RasterizerState.CullMode, pDesc->RasterizerState.FrontCounterClockwise, 
+          pDesc->RasterizerState.DepthBias, pDesc->RasterizerState.DepthBiasClamp, pDesc->RasterizerState.SlopeScaledDepthBias, 
+          pDesc->RasterizerState.DepthClipEnable, pDesc->RasterizerState.MultisampleEnable, pDesc->RasterizerState.AntialiasedLineEnable, 
+          pDesc->RasterizerState.ForcedSampleCount, pDesc->RasterizerState.ConservativeRaster);
+    TRACE("  DepthStencilState: {DepthEnable: %d, DepthWriteMask: %d, DepthFunc: %d, StencilEnable: %d, StencilReadMask: 0x%X, StencilWriteMask: 0x%X}", 
+          pDesc->DepthStencilState.DepthEnable, pDesc->DepthStencilState.DepthWriteMask, pDesc->DepthStencilState.DepthFunc, 
+          pDesc->DepthStencilState.StencilEnable, pDesc->DepthStencilState.StencilReadMask, pDesc->DepthStencilState.StencilWriteMask);
+    TRACE("  InputLayout: {pInputElementDescs: %p, NumElements: %u}", pDesc->InputLayout.pInputElementDescs, pDesc->InputLayout.NumElements);
+    TRACE("  IBStripCutValue: %d", pDesc->IBStripCutValue);
+    TRACE("  PrimitiveTopologyType: %d", pDesc->PrimitiveTopologyType);
+    TRACE("  NumRenderTargets: %u", pDesc->NumRenderTargets);
+    TRACE("  RTVFormats: [%d, %d, %d, %d, %d, %d, %d, %d]", pDesc->RTVFormats[0], pDesc->RTVFormats[1], pDesc->RTVFormats[2], 
+          pDesc->RTVFormats[3], pDesc->RTVFormats[4], pDesc->RTVFormats[5], pDesc->RTVFormats[6], pDesc->RTVFormats[7]);
+    TRACE("  DSVFormat: %d", pDesc->DSVFormat);
+    TRACE("  SampleDesc: {Count: %u, Quality: %u}", pDesc->SampleDesc.Count, pDesc->SampleDesc.Quality);
+    TRACE("  NodeMask: 0x%X", pDesc->NodeMask);
+    TRACE("  CachedPSO: {pCachedBlob: %p, CachedBlobSizeInBytes: %zu}", pDesc->CachedPSO.pCachedBlob, pDesc->CachedPSO.CachedBlobSizeInBytes);
+    TRACE("  Flags: 0x%X", pDesc->Flags);
 
+
+
+ // Verify D3D11 device is valid
+    ID3D11Device* d3d11Device = m_device->GetD3D11Device();
+    if (!d3d11Device) {
+        ERR("D3D11 device is null");
+        return E_FAIL;
+    }
     // Create vertex shader
     if (pDesc->VS.pShaderBytecode && pDesc->VS.BytecodeLength) {
+        TRACE("Creating vertex shader with bytecode length %zu", pDesc->VS.BytecodeLength);
+        
+        // Special case: Some applications pass very small bytecode lengths
+        if (pDesc->VS.BytecodeLength < 4) {
+            WARN("Vertex shader bytecode length too small: %zu bytes. Treating as null shader.", 
+                 pDesc->VS.BytecodeLength);
+            m_vertexShader = nullptr;
+            return S_OK;
+        }
+
+        // Validate minimum shader bytecode size for DXBC header
+        if (pDesc->VS.BytecodeLength < 20) {  // DXBC header is at least 20 bytes
+            ERR("Invalid vertex shader: Bytecode length %zu bytes is too small for DXBC header (minimum 20 bytes)", 
+                pDesc->VS.BytecodeLength);
+            return E_INVALIDARG;
+        }
+
+        // Validate DXBC signature and version
+        const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->VS.pShaderBytecode);
+        const uint8_t* byteData = static_cast<const uint8_t*>(pDesc->VS.pShaderBytecode);
+        
+        // Check for DXBC signature
+        if (byteData[0] != 'D' || byteData[1] != 'X' || byteData[2] != 'B' || byteData[3] != 'C') {
+            ERR("Invalid vertex shader: Missing DXBC signature (got: %c%c%c%c)", 
+                byteData[0], byteData[1], byteData[2], byteData[3]);
+            return E_INVALIDARG;
+        }
+
+        // Log first 32 bytes of shader bytecode for debugging
+        TRACE("Shader bytecode header:");
+        for (size_t i = 0; i < std::min<size_t>(32, pDesc->VS.BytecodeLength); i++) {
+            if (i % 16 == 0) TRACE("\n  %04zx:", i);
+            TRACE(" %02x", byteData[i]);
+        }
+        TRACE("\n");
+
+        // Create the shader
         HRESULT hr = m_device->GetD3D11Device()->CreateVertexShader(
             pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength, nullptr,
             &m_vertexShader);
         if (FAILED(hr)) {
-            ERR("Failed to create vertex shader, hr %#x.", hr);
+            ERR("Failed to create vertex shader, hr %#x. Bytecode length: %zu", 
+                hr, pDesc->VS.BytecodeLength);
             return hr;
         }
+        
+        TRACE("Successfully created vertex shader");
     }
 
     // Create stream output if requested
@@ -201,6 +281,12 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
 
     // Create pixel shader
     if (pDesc->PS.pShaderBytecode && pDesc->PS.BytecodeLength) {
+        TRACE("Creating pixel shader with bytecode length %zu", pDesc->PS.BytecodeLength);
+        // Log first few bytes of shader bytecode for debugging
+        const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->PS.pShaderBytecode);
+        if (pDesc->PS.BytecodeLength >= 4) {
+            TRACE("Shader bytecode header: %08x", dwordData[0]);
+        }
         HRESULT hr = m_device->GetD3D11Device()->CreatePixelShader(
             pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength, nullptr,
             &m_pixelShader);
@@ -212,6 +298,12 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
 
     // Create geometry shader
     if (pDesc->GS.pShaderBytecode && pDesc->GS.BytecodeLength) {
+        TRACE("Creating geometry shader with bytecode length %zu", pDesc->GS.BytecodeLength);
+        // Log first few bytes of shader bytecode for debugging
+        const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->GS.pShaderBytecode);
+        if (pDesc->GS.BytecodeLength >= 4) {
+            TRACE("Shader bytecode header: %08x", dwordData[0]);
+        }
         HRESULT hr = m_device->GetD3D11Device()->CreateGeometryShader(
             pDesc->GS.pShaderBytecode, pDesc->GS.BytecodeLength, nullptr,
             &m_geometryShader);
@@ -223,6 +315,12 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
 
     // Create hull shader
     if (pDesc->HS.pShaderBytecode && pDesc->HS.BytecodeLength) {
+        TRACE("Creating hull shader with bytecode length %zu", pDesc->HS.BytecodeLength);
+        // Log first few bytes of shader bytecode for debugging
+        const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->HS.pShaderBytecode);
+        if (pDesc->HS.BytecodeLength >= 4) {
+            TRACE("Shader bytecode header: %08x", dwordData[0]);
+        }
         HRESULT hr = m_device->GetD3D11Device()->CreateHullShader(
             pDesc->HS.pShaderBytecode, pDesc->HS.BytecodeLength, nullptr,
             &m_hullShader);
@@ -234,6 +332,12 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
 
     // Create domain shader
     if (pDesc->DS.pShaderBytecode && pDesc->DS.BytecodeLength) {
+        TRACE("Creating domain shader with bytecode length %zu", pDesc->DS.BytecodeLength);
+        // Log first few bytes of shader bytecode for debugging
+        const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->DS.pShaderBytecode);
+        if (pDesc->DS.BytecodeLength >= 4) {
+            TRACE("Shader bytecode header: %08x", dwordData[0]);
+        }
         HRESULT hr = m_device->GetD3D11Device()->CreateDomainShader(
             pDesc->DS.pShaderBytecode, pDesc->DS.BytecodeLength, nullptr,
             &m_domainShader);
@@ -412,6 +516,12 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeCompute(
         return E_INVALIDARG;
     }
 
+    TRACE("Creating compute shader with bytecode length %zu", pDesc->CS.BytecodeLength);
+    // Log first few bytes of shader bytecode for debugging
+    const uint32_t* dwordData = static_cast<const uint32_t*>(pDesc->CS.pShaderBytecode);
+    if (pDesc->CS.BytecodeLength >= 4) {
+        TRACE("Shader bytecode header: %08x", dwordData[0]);
+    }
     HRESULT hr = m_device->GetD3D11Device()->CreateComputeShader(
         pDesc->CS.pShaderBytecode, pDesc->CS.BytecodeLength, nullptr,
         &m_computeShader);

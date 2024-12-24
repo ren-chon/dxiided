@@ -1738,23 +1738,40 @@ UINT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCreationFlags() {
     return m_d3d11Device ? m_d3d11Device->GetCreationFlags() : 0;
 }
 
-ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
-    TRACE("WrappedD3D12ToD3D11Device::GetD3D11Resource called on object %p", this);
-    if (!d3d12Resource) {
-        return nullptr;
-    }
+// ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
+//     TRACE("WrappedD3D12ToD3D11Device::GetD3D11Resource called on object %p", this);
+//     if (!d3d12Resource) {
+//         return nullptr;
+//     }
 
-    // Try to get the D3D11 resource from the D3D12 resource's private data
-    ID3D11Resource* d3d11Resource = nullptr;
-    UINT dataSize = sizeof(ID3D11Resource*);
+//     // Try to get the D3D11 resource from the D3D12 resource's private data
+//     ID3D11Resource* d3d11Resource = nullptr;
+//     UINT dataSize = sizeof(ID3D11Resource*);
 
-    if (SUCCEEDED(d3d12Resource->GetPrivateData(__uuidof(ID3D11Resource),
-                                                &dataSize, &d3d11Resource))) {
-        return d3d11Resource;
-    }
+//     if (SUCCEEDED(d3d12Resource->GetPrivateData(__uuidof(ID3D11Resource),
+//                                                 &dataSize, &d3d11Resource))) {
+//         return d3d11Resource;
+//     }
 
-    ERR("D3D11 resource not found for D3D12 resource %p", d3d12Resource);
-    return nullptr;
+//     ERR("D3D11 resource not found for D3D12 resource %p", d3d12Resource);
+//     return nullptr;
+// }
+
+void WrappedD3D12ToD3D11Device::StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    m_d3d12ToD3d11Resources[d3d12Resource] = d3d11Resource;
+    m_d3d11ToD3d12Resources[d3d11Resource] = d3d12Resource;
 }
 
+ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    auto it = m_d3d12ToD3d11Resources.find(d3d12Resource);
+    return (it != m_d3d12ToD3d11Resources.end()) ? it->second : nullptr;
+}
+
+ID3D12Resource* WrappedD3D12ToD3D11Device::GetD3D12Resource(ID3D11Resource* d3d11Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    auto it = m_d3d11ToD3d12Resources.find(d3d11Resource);
+    return (it != m_d3d11ToD3d12Resources.end()) ? it->second : nullptr;
+}
 }  // namespace dxiided

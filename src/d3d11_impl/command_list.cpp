@@ -1,4 +1,5 @@
 #include "d3d11_impl/command_list.hpp"
+#include "d3d11_impl/pipeline_state.hpp"
 #include "d3d11_impl/resource.hpp"
 
 #include "common/debug.hpp"
@@ -354,7 +355,14 @@ void WrappedD3D12ToD3D11CommandList::OMSetStencilRef(UINT StencilRef) {
 
 void WrappedD3D12ToD3D11CommandList::SetPipelineState(ID3D12PipelineState* pPipelineState) {
     TRACE("WrappedD3D12ToD3D11CommandList::SetPipelineState(%p)", pPipelineState);
-    // TODO: Implement pipeline state setting
+    
+    if (!pPipelineState) {
+        WARN("Null pipeline state passed to SetPipelineState");
+        return;
+    }
+
+    auto* pipelineState = static_cast<WrappedD3D12ToD3D11PipelineState*>(pPipelineState);
+    pipelineState->Apply(m_context.Get());
 }
 
 void WrappedD3D12ToD3D11CommandList::ExecuteBundle(ID3D12GraphicsCommandList* pCommandList) {

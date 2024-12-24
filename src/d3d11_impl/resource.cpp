@@ -222,24 +222,23 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
 }
 
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
-    if (m_device && m_resource) {
-        // Store the mapping between D3D12 and D3D11 resources in the device
-        Microsoft::WRL::ComPtr<ID3D11Device> d3d11Device;
-        if (SUCCEEDED(m_device->QueryInterface(__uuidof(ID3D11Device), 
-            reinterpret_cast<void**>(d3d11Device.GetAddressOf())))) {
-            
-            // Store this D3D12 wrapper as private data on the D3D11 resource
-            m_resource->SetPrivateDataInterface(
-                __uuidof(ID3D12Resource),
-                static_cast<ID3D12Resource*>(this));
-
-            // Also store the D3D11 resource as private data on this D3D12 wrapper
-            SetPrivateDataInterface(
-                __uuidof(ID3D11Resource),
-                m_resource.Get());
-
-            TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p", 
-                  this, m_resource.Get());
+    // Store D3D11<->D3D12 resource mapping
+    Microsoft::WRL::ComPtr<ID3D11Resource> d3d11Resource;
+    if (SUCCEEDED(m_resource.As(&d3d11Resource))) {
+        m_device->StoreD3D11ResourceMapping(this, d3d11Resource.Get());
+        TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p", this, d3d11Resource.Get());
+        
+        // For buffer resources, get the GPU virtual address
+        D3D11_RESOURCE_DIMENSION dimension;
+        d3d11Resource->GetType(&dimension);
+        if (dimension == D3D11_RESOURCE_DIMENSION_BUFFER) {
+            Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+            if (SUCCEEDED(d3d11Resource.As(&buffer))) {
+                D3D11_BUFFER_DESC desc;
+                buffer->GetDesc(&desc);
+                // Use buffer address as GPU virtual address for D3D12 compatibility
+                m_gpuAddress = reinterpret_cast<D3D12_GPU_VIRTUAL_ADDRESS>(buffer.Get());
+            }
         }
     }
 }

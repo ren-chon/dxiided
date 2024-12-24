@@ -8,7 +8,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
+#include <mutex>
 #include "common/debug.hpp"
 #include "d3d11_impl/command_queue.hpp"
 #include "d3d11_impl/device_features.hpp"
@@ -314,6 +314,9 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     // Helper methods
     ID3D11Device* GetD3D11Device() { return m_d3d11Device.Get(); }
     ID3D11DeviceContext* GetD3D11Context() { return m_d3d11Context.Get(); }
+    ID3D11Resource* GetD3D11Resource(ID3D12Resource* d3d12Resource);
+    ID3D12Resource* GetD3D12Resource(ID3D11Resource* d3d11Resource);
+    void StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource);
 
    private:
     WrappedD3D12ToD3D11Device(Microsoft::WRL::ComPtr<ID3D11Device> device,
@@ -332,11 +335,11 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     std::unordered_map<ID3D12Resource*, Microsoft::WRL::ComPtr<ID3D11Resource>>
         m_resourceMap;
     std::vector<std::unique_ptr<WrappedD3D12ToD3D11CommandQueue>> m_commandQueues;
+    // Resource mapping
+    std::mutex m_resourceMappingMutex;
+    std::unordered_map<ID3D12Resource*, ID3D11Resource*> m_d3d12ToD3d11Resources;
+    std::unordered_map<ID3D11Resource*, ID3D12Resource*> m_d3d11ToD3d12Resources;
 
-    // Helper to get D3D11 resource from D3D12 resource using private data
-    ID3D11Resource* GetD3D11Resource(ID3D12Resource* d3d12Resource);
-
-    // Get D3D11 device interface
 };
 
 }  // namespace dxiided
