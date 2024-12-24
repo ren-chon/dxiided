@@ -997,6 +997,10 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetDeviceRemovedReason() {
     return S_OK;
 }
 
+
+// Forward declare the helper function
+UINT GetFormatByteSize(DXGI_FORMAT format);
+
 void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
     const D3D12_RESOURCE_DESC* pResourceDesc, UINT FirstSubresource,
     UINT NumSubresources, UINT64 BaseOffset,
@@ -1007,6 +1011,146 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
         "%p)",
         pResourceDesc, FirstSubresource, NumSubresources, BaseOffset, pLayouts,
         pNumRows, pRowSizeInBytes, pTotalBytes);
+
+    if (!pResourceDesc) {
+        ERR("Invalid resource description");
+        return;
+    }
+
+    // Calculate basic texture information
+    UINT width = (UINT)pResourceDesc->Width;
+    UINT height = pResourceDesc->Height;
+    UINT depth = (pResourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) ? 
+                 pResourceDesc->DepthOrArraySize : 1;
+    UINT arraySize = (pResourceDesc->Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D) ?
+                    pResourceDesc->DepthOrArraySize : 1;
+    UINT mipLevels = pResourceDesc->MipLevels;
+    DXGI_FORMAT format = pResourceDesc->Format;
+
+    // Get format information
+    UINT formatByteSize = GetFormatByteSize(format);
+    if (formatByteSize == 0) {
+        ERR("Unsupported format %d", format);
+        return;
+    }
+
+    UINT64 totalSize = 0;
+    for (UINT i = 0; i < NumSubresources; i++) {
+        UINT subresource = FirstSubresource + i;
+        UINT mipLevel = subresource % mipLevels;
+        
+        // Calculate dimensions for this mip level
+        UINT mipWidth = std::max(1U, width >> mipLevel);
+        UINT mipHeight = std::max(1U, height >> mipLevel);
+        UINT mipDepth = std::max(1U, depth >> mipLevel);
+
+        // Calculate row pitch (aligned to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
+        UINT rowPitch = ((mipWidth * formatByteSize + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) 
+                        / D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) 
+                        * D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+
+        // Fill in the footprint if requested
+        if (pLayouts) {
+            pLayouts[i].Offset = BaseOffset + totalSize;
+            pLayouts[i].Footprint.Format = format;
+            pLayouts[i].Footprint.Width = mipWidth;
+            pLayouts[i].Footprint.Height = mipHeight;
+            pLayouts[i].Footprint.Depth = mipDepth;
+            pLayouts[i].Footprint.RowPitch = rowPitch;
+        }
+
+        // Calculate size information
+        UINT64 rowSize = mipWidth * formatByteSize;
+        UINT numRows = mipHeight * mipDepth;
+        UINT64 subresourceSize = (UINT64)rowPitch * numRows;
+
+        // Store size information if requested
+        if (pNumRows) {
+            pNumRows[i] = numRows;
+        }
+        if (pRowSizeInBytes) {
+            pRowSizeInBytes[i] = rowSize;
+        }
+        
+        totalSize += subresourceSize;
+    }
+
+    if (pTotalBytes) {
+        *pTotalBytes = totalSize;
+    }
+}
+
+UINT GetFormatByteSize(DXGI_FORMAT format) {
+    switch (format) {
+        case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+        case DXGI_FORMAT_R32G32B32A32_FLOAT:
+        case DXGI_FORMAT_R32G32B32A32_UINT:
+        case DXGI_FORMAT_R32G32B32A32_SINT:
+            return 16;
+
+        case DXGI_FORMAT_R32G32B32_TYPELESS:
+        case DXGI_FORMAT_R32G32B32_FLOAT:
+        case DXGI_FORMAT_R32G32B32_UINT:
+        case DXGI_FORMAT_R32G32B32_SINT:
+            return 12;
+
+        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+        case DXGI_FORMAT_R16G16B16A16_UINT:
+        case DXGI_FORMAT_R16G16B16A16_SNORM:
+        case DXGI_FORMAT_R16G16B16A16_SINT:
+        case DXGI_FORMAT_R32G32_TYPELESS:
+        case DXGI_FORMAT_R32G32_FLOAT:
+        case DXGI_FORMAT_R32G32_UINT:
+        case DXGI_FORMAT_R32G32_SINT:
+            return 8;
+
+        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        case DXGI_FORMAT_R8G8B8A8_UINT:
+        case DXGI_FORMAT_R8G8B8A8_SNORM:
+        case DXGI_FORMAT_R8G8B8A8_SINT:
+        case DXGI_FORMAT_R16G16_TYPELESS:
+        case DXGI_FORMAT_R16G16_FLOAT:
+        case DXGI_FORMAT_R16G16_UNORM:
+        case DXGI_FORMAT_R16G16_UINT:
+        case DXGI_FORMAT_R16G16_SNORM:
+        case DXGI_FORMAT_R16G16_SINT:
+        case DXGI_FORMAT_R32_TYPELESS:
+        case DXGI_FORMAT_D32_FLOAT:
+        case DXGI_FORMAT_R32_FLOAT:
+        case DXGI_FORMAT_R32_UINT:
+        case DXGI_FORMAT_R32_SINT:
+            return 4;
+
+        case DXGI_FORMAT_R8G8_TYPELESS:
+        case DXGI_FORMAT_R8G8_UNORM:
+        case DXGI_FORMAT_R8G8_UINT:
+        case DXGI_FORMAT_R8G8_SNORM:
+        case DXGI_FORMAT_R8G8_SINT:
+        case DXGI_FORMAT_R16_TYPELESS:
+        case DXGI_FORMAT_R16_FLOAT:
+        case DXGI_FORMAT_D16_UNORM:
+        case DXGI_FORMAT_R16_UNORM:
+        case DXGI_FORMAT_R16_UINT:
+        case DXGI_FORMAT_R16_SNORM:
+        case DXGI_FORMAT_R16_SINT:
+            return 2;
+
+        case DXGI_FORMAT_R8_TYPELESS:
+        case DXGI_FORMAT_R8_UNORM:
+        case DXGI_FORMAT_R8_UINT:
+        case DXGI_FORMAT_R8_SNORM:
+        case DXGI_FORMAT_R8_SINT:
+        case DXGI_FORMAT_A8_UNORM:
+            return 1;
+
+        default:
+            ERR("Unknown format %d", format);
+            return 0;
+    }
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateQueryHeap(
