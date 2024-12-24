@@ -5,6 +5,7 @@
 #include <dxgi1_2.h>
 
 #include "d3d11_impl/command_allocator.hpp"
+#include "d3d11_impl/pipeline_state.hpp"
 #include "d3d11_impl/command_list.hpp"
 #include "d3d11_impl/descriptor_heap.hpp"
 #include "d3d11_impl/device_features.hpp"
@@ -226,17 +227,19 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommandAllocator(
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateGraphicsPipelineState(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc, REFIID riid,
     void** ppPipelineState) {
-    // TODO: Implement graphics pipeline state creation
-    FIXME("Graphics pipeline state creation not implemented yet.");
-    return E_NOTIMPL;
+    TRACE("WrappedD3D12ToD3D11Device::CreateGraphicsPipelineState %p, %s, %p", pDesc,
+          debugstr_guid(&riid).c_str(), ppPipelineState);
+
+    return WrappedD3D12ToD3D11PipelineState::CreateGraphics(this, pDesc, riid, ppPipelineState);
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateComputePipelineState(
     const D3D12_COMPUTE_PIPELINE_STATE_DESC* pDesc, REFIID riid,
     void** ppPipelineState) {
-    // TODO: Implement compute pipeline state creation
-    FIXME("Compute pipeline state creation not implemented yet.");
-    return E_NOTIMPL;
+    TRACE("WrappedD3D12ToD3D11Device::CreateComputePipelineState %p, %s, %p", pDesc,
+          debugstr_guid(&riid).c_str(), ppPipelineState);
+
+    return WrappedD3D12ToD3D11PipelineState::CreateCompute(this, pDesc, riid, ppPipelineState);
 }
 
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCommandList(
@@ -1207,7 +1210,118 @@ WrappedD3D12ToD3D11Device::CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM
     TRACE("WrappedD3D12ToD3D11Device::CreatePipelineState called on object %p", this);
     TRACE("  Desc: %p, riid: %s, ppPipelineState: %p", pDesc,
           debugstr_guid(&riid).c_str(), ppPipelineState);
-    return E_NOTIMPL;
+
+    if (!pDesc || !ppPipelineState) {
+        return E_INVALIDARG;
+    }
+
+    // Parse the pipeline state stream
+    const uint8_t* stream = static_cast<const uint8_t*>(pDesc->pPipelineStateSubobjectStream);
+    size_t streamSize = pDesc->SizeInBytes;
+    
+    // Create appropriate pipeline state based on the stream type
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE streamType = *reinterpret_cast<const D3D12_PIPELINE_STATE_SUBOBJECT_TYPE*>(stream);
+    
+    if (streamType == D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS) {
+        // Handle compute pipeline state
+        D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc = {};
+        
+        // Parse compute shader from stream
+        stream += sizeof(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE);
+        computeDesc.CS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+        
+        // Create compute pipeline state
+        return CreateComputePipelineState(&computeDesc, riid, ppPipelineState);
+    } else {
+        // Handle graphics pipeline state
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDesc = {};
+        
+        // Parse graphics pipeline state from stream
+        while (stream < static_cast<const uint8_t*>(pDesc->pPipelineStateSubobjectStream) + streamSize) {
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type = *reinterpret_cast<const D3D12_PIPELINE_STATE_SUBOBJECT_TYPE*>(stream);
+            stream += sizeof(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE);
+            
+            switch (type) {
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS:
+                    graphicsDesc.VS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+                    stream += sizeof(D3D12_SHADER_BYTECODE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS:
+                    graphicsDesc.PS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+                    stream += sizeof(D3D12_SHADER_BYTECODE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS:
+                    graphicsDesc.DS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+                    stream += sizeof(D3D12_SHADER_BYTECODE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS:
+                    graphicsDesc.HS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+                    stream += sizeof(D3D12_SHADER_BYTECODE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS:
+                    graphicsDesc.GS = *reinterpret_cast<const D3D12_SHADER_BYTECODE*>(stream);
+                    stream += sizeof(D3D12_SHADER_BYTECODE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT:
+                    graphicsDesc.StreamOutput = *reinterpret_cast<const D3D12_STREAM_OUTPUT_DESC*>(stream);
+                    stream += sizeof(D3D12_STREAM_OUTPUT_DESC);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND:
+                    graphicsDesc.BlendState = *reinterpret_cast<const D3D12_BLEND_DESC*>(stream);
+                    stream += sizeof(D3D12_BLEND_DESC);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK:
+                    graphicsDesc.SampleMask = *reinterpret_cast<const UINT*>(stream);
+                    stream += sizeof(UINT);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER:
+                    graphicsDesc.RasterizerState = *reinterpret_cast<const D3D12_RASTERIZER_DESC*>(stream);
+                    stream += sizeof(D3D12_RASTERIZER_DESC);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL:
+                    graphicsDesc.DepthStencilState = *reinterpret_cast<const D3D12_DEPTH_STENCIL_DESC*>(stream);
+                    stream += sizeof(D3D12_DEPTH_STENCIL_DESC);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT:
+                    graphicsDesc.InputLayout = *reinterpret_cast<const D3D12_INPUT_LAYOUT_DESC*>(stream);
+                    stream += sizeof(D3D12_INPUT_LAYOUT_DESC);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE:
+                    graphicsDesc.IBStripCutValue = *reinterpret_cast<const D3D12_INDEX_BUFFER_STRIP_CUT_VALUE*>(stream);
+                    stream += sizeof(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY:
+                    graphicsDesc.PrimitiveTopologyType = *reinterpret_cast<const D3D12_PRIMITIVE_TOPOLOGY_TYPE*>(stream);
+                    stream += sizeof(D3D12_PRIMITIVE_TOPOLOGY_TYPE);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS:
+                    {
+                        const D3D12_RT_FORMAT_ARRAY* rtFormats = reinterpret_cast<const D3D12_RT_FORMAT_ARRAY*>(stream);
+                        graphicsDesc.NumRenderTargets = rtFormats->NumRenderTargets;
+                        for (UINT i = 0; i < rtFormats->NumRenderTargets; i++) {
+                            graphicsDesc.RTVFormats[i] = rtFormats->RTFormats[i];
+                        }
+                        stream += sizeof(D3D12_RT_FORMAT_ARRAY);
+                    }
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT:
+                    graphicsDesc.DSVFormat = *reinterpret_cast<const DXGI_FORMAT*>(stream);
+                    stream += sizeof(DXGI_FORMAT);
+                    break;
+                case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC:
+                    graphicsDesc.SampleDesc = *reinterpret_cast<const DXGI_SAMPLE_DESC*>(stream);
+                    stream += sizeof(DXGI_SAMPLE_DESC);
+                    break;
+                default:
+                    // Skip unknown subobjects
+                    stream += sizeof(uint64_t); // Assume 64-bit alignment
+                    break;
+            }
+        }
+        
+        // Create graphics pipeline state
+        return CreateGraphicsPipelineState(&graphicsDesc, riid, ppPipelineState);
+    }
 }
 
 // ID3D12Device2 methods
