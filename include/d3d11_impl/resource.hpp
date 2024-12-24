@@ -80,8 +80,12 @@ class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
     ID3D11Resource* GetD3D11Resource() const { return m_resource.Get(); }
     static UINT GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc);
     void StoreInDeviceMap();
-
-   private:
+    
+    // Format handling methods
+    DXGI_FORMAT GetFormat() const { return m_format; }
+    void SetFormat(DXGI_FORMAT format) { m_format = format; }
+    UINT GetD3D11CPUAccessFlags(const D3D12_HEAP_PROPERTIES* pHeapProperties);
+ private:
     WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
                                 const D3D12_HEAP_PROPERTIES* pHeapProperties,
                                 D3D12_HEAP_FLAGS HeapFlags,
@@ -110,6 +114,7 @@ class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
     D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
     D3D12_RESOURCE_STATES m_state;  // Add state member
     bool m_isUAV{false};
+    DXGI_FORMAT m_format{DXGI_FORMAT_UNKNOWN};  // Add format member
 };
 
 }  // namespace dxiided

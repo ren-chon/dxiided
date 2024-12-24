@@ -60,168 +60,158 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                              const D3D12_RESOURCE_DESC* pDesc,
                              D3D12_RESOURCE_STATES InitialState)
     : m_device(device),
+      m_resource(nullptr),
       m_desc(*pDesc),
       m_heapProperties(*pHeapProperties),
       m_heapFlags(HeapFlags),
+      m_gpuAddress(0),
+      m_refCount(1),
       m_currentState(InitialState),
-      m_gpuAddress(0) {
+      m_state(InitialState),
+      m_isUAV(false),
+      m_format(pDesc->Format) {
     
     // If it looks like a buffer (1D with height=1), treat it as one
-    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && 
-        pDesc->Height == 1 && 
-        pDesc->DepthOrArraySize == 1) {
-        TRACE("Converting 1D texture with height=1 to buffer");
-        m_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
+        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
+         pDesc->Height == 1)) {
+        
+        D3D11_BUFFER_DESC bufferDesc = {};
+        bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
+        bufferDesc.Usage = GetD3D11Usage(pHeapProperties);
+        bufferDesc.BindFlags = GetD3D11BindFlags(pDesc);
+        bufferDesc.CPUAccessFlags = GetD3D11CPUAccessFlags(pHeapProperties);
+        bufferDesc.MiscFlags = GetMiscFlags(pDesc);
+        bufferDesc.StructureByteStride = 0;
+
+        // If this buffer will be used as SRV/UAV, set format
+        if (bufferDesc.BindFlags & (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
+            // If we know the format from resource desc, use that
+            if (m_format == DXGI_FORMAT_UNKNOWN) {
+                // Default to R32 format for shader visibility
+                m_format = DXGI_FORMAT_R32_FLOAT;
+            }
+            TRACE("Creating buffer with format %d for SRV/UAV usage", m_format);
+        }
+
+        TRACE("Creating buffer with Usage=%d, CPUAccessFlags=%d, BindFlags=%d",
+              bufferDesc.Usage, bufferDesc.CPUAccessFlags, bufferDesc.BindFlags);
+
+        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+        HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
+            &bufferDesc, nullptr, &buffer);
+        
+        if (FAILED(hr)) {
+            ERR("Failed to create D3D11 buffer, hr %#x", hr);
+            return;
+        }
+        
+        m_resource = buffer;
+        
+        // Store GPU virtual address for buffer
+        if (bufferDesc.BindFlags & (D3D11_BIND_VERTEX_BUFFER |
+                                  D3D11_BIND_INDEX_BUFFER |
+                                  D3D11_BIND_CONSTANT_BUFFER |
+                                  D3D11_BIND_SHADER_RESOURCE |
+                                  D3D11_BIND_UNORDERED_ACCESS)) {
+            m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
+        }
+    }
+    else {
+        DXGI_FORMAT format = GetViewFormat(pDesc->Format);
+        switch (pDesc->Dimension) {
+            case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
+                TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE1D match");
+                D3D11_TEXTURE1D_DESC texDesc = {};
+                texDesc.Width = static_cast<UINT>(pDesc->Width);
+                texDesc.MipLevels = pDesc->MipLevels;
+                texDesc.ArraySize = pDesc->DepthOrArraySize;
+                texDesc.Format = format;
+                texDesc.Usage = GetD3D11Usage(pHeapProperties);
+                texDesc.BindFlags = GetD3D11BindFlags(pDesc);
+                texDesc.CPUAccessFlags =
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
+                        ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                        : 0;
+                texDesc.MiscFlags = 0;
+
+                Microsoft::WRL::ComPtr<ID3D11Texture1D> texture;
+                HRESULT hr = m_device->GetD3D11Device()->CreateTexture1D(
+                    &texDesc, nullptr, &texture);
+                if (FAILED(hr)) {
+                    ERR("Failed to create texture 1D, hr %#x.", hr);
+                    return;
+                }
+                m_resource = texture;
+                StoreInDeviceMap();
+                break;
+            }
+            case D3D12_RESOURCE_DIMENSION_TEXTURE2D: {
+                TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE2D match");
+                D3D11_TEXTURE2D_DESC texDesc = {};
+                texDesc.Width = static_cast<UINT>(pDesc->Width);
+                texDesc.Height = pDesc->Height;
+                texDesc.MipLevels = pDesc->MipLevels;
+                texDesc.ArraySize = pDesc->DepthOrArraySize;
+                texDesc.Format = format;
+                texDesc.SampleDesc = pDesc->SampleDesc;
+                texDesc.Usage = GetD3D11Usage(pHeapProperties);
+                texDesc.BindFlags = GetD3D11BindFlags(pDesc);
+                texDesc.CPUAccessFlags =
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
+                        ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                        : 0;
+                texDesc.MiscFlags = GetMiscFlags(pDesc);
+
+                Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+                HRESULT hr = m_device->GetD3D11Device()->CreateTexture2D(
+                    &texDesc, nullptr, &texture);
+                if (FAILED(hr)) {
+                    ERR("Failed to create texture 2D, hr %#x.", hr);
+                    return;
+                }
+                m_resource = texture;
+                StoreInDeviceMap();
+                break;
+            }
+            case D3D12_RESOURCE_DIMENSION_TEXTURE3D: {
+                TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE3D match");
+                D3D11_TEXTURE3D_DESC texDesc = {};
+                texDesc.Width = static_cast<UINT>(pDesc->Width);
+                texDesc.Height = pDesc->Height;
+                texDesc.Depth = pDesc->DepthOrArraySize;
+                texDesc.MipLevels = pDesc->MipLevels;
+                texDesc.Format = format;
+                texDesc.Usage = GetD3D11Usage(pHeapProperties);
+                texDesc.BindFlags = GetD3D11BindFlags(pDesc);
+                texDesc.CPUAccessFlags =
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
+                        ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
+                        : 0;
+                texDesc.MiscFlags = GetMiscFlags(pDesc);
+
+                Microsoft::WRL::ComPtr<ID3D11Texture3D> texture;
+                HRESULT hr = m_device->GetD3D11Device()->CreateTexture3D(
+                    &texDesc, nullptr, &texture);
+                if (FAILED(hr)) {
+                    ERR("Failed to create texture 3D, hr %#x.", hr);
+                    return;
+                }
+                m_resource = texture;
+                StoreInDeviceMap();
+                break;
+            }
+            default:
+                ERR("Unsupported resource dimension %d.", pDesc->Dimension);
+                break;
+        }
     }
 
     TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
           m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
-
-    D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc);
-    D3D11_USAGE usage = GetD3D11Usage(pHeapProperties);
-    DXGI_FORMAT format = pDesc->Format;
-
-    // Handle depth-stencil formats
-    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-        switch (format) {
-            case DXGI_FORMAT_R32_TYPELESS:
-                format = DXGI_FORMAT_D32_FLOAT;
-                break;
-            case DXGI_FORMAT_R24G8_TYPELESS:
-                format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-                break;
-            case DXGI_FORMAT_R16_TYPELESS:
-                format = DXGI_FORMAT_D16_UNORM;
-                break;
-        }
-    } else {
-        format = GetViewFormat(format);
-    }
-
-    switch (m_desc.Dimension) {
-        case D3D12_RESOURCE_DIMENSION_BUFFER: {
-            TRACE("D3D12_RESOURCE_DIMENSION_BUFFER match");
-            D3D11_BUFFER_DESC bufferDesc = {};
-            bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
-            bufferDesc.Usage = usage;
-            bufferDesc.BindFlags = bindFlags;
-            bufferDesc.CPUAccessFlags = 
-                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE :
-                (usage == D3D11_USAGE_STAGING) ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE) :
-                (pHeapProperties->Type == D3D12_HEAP_TYPE_UPLOAD) ? D3D11_CPU_ACCESS_WRITE :
-                (pHeapProperties->Type == D3D12_HEAP_TYPE_READBACK) ? D3D11_CPU_ACCESS_READ : 0;
-            bufferDesc.MiscFlags = GetMiscFlags(pDesc);
-            bufferDesc.StructureByteStride = 0;
-
-            TRACE("Creating buffer with Usage=%d, CPUAccessFlags=%d, BindFlags=%d",
-                  bufferDesc.Usage, bufferDesc.CPUAccessFlags, bufferDesc.BindFlags);
-
-            Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-            HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
-                &bufferDesc, nullptr, &buffer);
-            if (FAILED(hr)) {
-                ERR("Failed to create buffer, hr %#x.", hr);
-                return;
-            }
-            m_resource = buffer;
-            // Only assign GPU virtual address for buffers
-            if (SUCCEEDED(hr)) {
-                // Only allocate GPU virtual address for buffers that can be accessed by shaders
-                if (bindFlags & (D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
-                    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, static_cast<UINT64>(pDesc->Width));
-                }
-            }
-            StoreInDeviceMap();
-            break;
-        }
-        case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
-            TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE1D match");
-            D3D11_TEXTURE1D_DESC texDesc = {};
-            texDesc.Width = static_cast<UINT>(pDesc->Width);
-            texDesc.MipLevels = pDesc->MipLevels;
-            texDesc.ArraySize = pDesc->DepthOrArraySize;
-            texDesc.Format = format;
-            texDesc.Usage = usage;
-            texDesc.BindFlags = bindFlags;
-            texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
-                : (usage == D3D11_USAGE_STAGING)
-                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                    : 0;
-            texDesc.MiscFlags = 0;
-
-            Microsoft::WRL::ComPtr<ID3D11Texture1D> texture;
-            HRESULT hr = m_device->GetD3D11Device()->CreateTexture1D(
-                &texDesc, nullptr, &texture);
-            if (FAILED(hr)) {
-                ERR("Failed to create texture 1D, hr %#x.", hr);
-                return;
-            }
-            m_resource = texture;
-            StoreInDeviceMap();
-            break;
-        }
-        case D3D12_RESOURCE_DIMENSION_TEXTURE2D: {
-            TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE2D match");
-            D3D11_TEXTURE2D_DESC texDesc = {};
-            texDesc.Width = static_cast<UINT>(pDesc->Width);
-            texDesc.Height = pDesc->Height;
-            texDesc.MipLevels = pDesc->MipLevels;
-            texDesc.ArraySize = pDesc->DepthOrArraySize;
-            texDesc.Format = format;
-            texDesc.SampleDesc = pDesc->SampleDesc;
-            texDesc.Usage = usage;
-            texDesc.BindFlags = bindFlags;
-            texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
-                : (usage == D3D11_USAGE_STAGING)
-                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                    : 0;
-            texDesc.MiscFlags = GetMiscFlags(pDesc);
-
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-            HRESULT hr = m_device->GetD3D11Device()->CreateTexture2D(
-                &texDesc, nullptr, &texture);
-            if (FAILED(hr)) {
-                ERR("Failed to create texture 2D, hr %#x.", hr);
-                return;
-            }
-            m_resource = texture;
-            StoreInDeviceMap();
-            break;
-        }
-        case D3D12_RESOURCE_DIMENSION_TEXTURE3D: {
-            TRACE("D3D12_RESOURCE_DIMENSION_TEXTURE3D match");
-            D3D11_TEXTURE3D_DESC texDesc = {};
-            texDesc.Width = static_cast<UINT>(pDesc->Width);
-            texDesc.Height = pDesc->Height;
-            texDesc.Depth = pDesc->DepthOrArraySize;
-            texDesc.MipLevels = pDesc->MipLevels;
-            texDesc.Format = format;
-            texDesc.Usage = usage;
-            texDesc.BindFlags = bindFlags;
-            texDesc.CPUAccessFlags =
-                (usage == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
-                : (usage == D3D11_USAGE_STAGING)
-                    ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
-                    : 0;
-            texDesc.MiscFlags = GetMiscFlags(pDesc);
-
-            Microsoft::WRL::ComPtr<ID3D11Texture3D> texture;
-            HRESULT hr = m_device->GetD3D11Device()->CreateTexture3D(
-                &texDesc, nullptr, &texture);
-            if (FAILED(hr)) {
-                ERR("Failed to create texture 3D, hr %#x.", hr);
-                return;
-            }
-            m_resource = texture;
-            StoreInDeviceMap();
-            break;
-        }
-        default:
-            ERR("Unsupported resource dimension %d.", pDesc->Dimension);
-            break;
-    }
 }
 
 WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
@@ -229,14 +219,18 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                             const D3D12_RESOURCE_DESC* pDesc,
                             D3D12_RESOURCE_STATES InitialState)
     : m_device(device)
+    , m_resource(resource)
     , m_desc(*pDesc)
+    , m_heapProperties{}
+    , m_heapFlags(D3D12_HEAP_FLAG_NONE)
     , m_gpuAddress(0)
+    , m_refCount(1)
     , m_currentState(InitialState)
-    , m_isUAV(false) {
+    , m_state(InitialState)
+    , m_isUAV(false)
+    , m_format(pDesc->Format) {
     
     if (resource) {
-        m_resource = resource;
-        
         // Check if this is a buffer that needs GPU virtual address
         if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             D3D11_BUFFER_DESC bufferDesc = {};
@@ -425,50 +419,40 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
 }
 
 DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
-    TRACE("WrappedD3D12ToD3D11Resource::GetViewFormat called with %d", format);
+    // For buffer resources with UNKNOWN format, default to R32_FLOAT
+    if (format == DXGI_FORMAT_UNKNOWN) {
+        return DXGI_FORMAT_R32_FLOAT;
+    }
+
+    // Handle typed buffer formats
     switch (format) {
-        case DXGI_FORMAT_R32G32B32A32_TYPELESS:
-            return DXGI_FORMAT_R32G32B32A32_FLOAT;
-        case DXGI_FORMAT_R32G32B32_TYPELESS:
-            return DXGI_FORMAT_R32G32B32_FLOAT;
-        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
-            return DXGI_FORMAT_R16G16B16A16_UNORM;
-        case DXGI_FORMAT_R32G32_TYPELESS:
-            return DXGI_FORMAT_R32G32_FLOAT;
-        case DXGI_FORMAT_R10G10B10A2_TYPELESS:
-            return DXGI_FORMAT_R10G10B10A2_UNORM;
-        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
-            return DXGI_FORMAT_R8G8B8A8_UNORM;
-        case DXGI_FORMAT_R16G16_TYPELESS:
-            return DXGI_FORMAT_R16G16_UNORM;
-        case DXGI_FORMAT_R8G8_TYPELESS:
-            return DXGI_FORMAT_R8G8_UNORM;
-        case DXGI_FORMAT_BC1_TYPELESS:
-            return DXGI_FORMAT_BC1_UNORM;
-        case DXGI_FORMAT_BC2_TYPELESS:
-            return DXGI_FORMAT_BC2_UNORM;
-        case DXGI_FORMAT_BC3_TYPELESS:
-            return DXGI_FORMAT_BC3_UNORM;
-        case DXGI_FORMAT_BC4_TYPELESS:
-            return DXGI_FORMAT_BC4_UNORM;
-        case DXGI_FORMAT_BC5_TYPELESS:
-            return DXGI_FORMAT_BC5_UNORM;
-        case DXGI_FORMAT_B8G8R8A8_TYPELESS:
-            return DXGI_FORMAT_B8G8R8A8_UNORM;
-        case DXGI_FORMAT_B8G8R8X8_TYPELESS:
-            return DXGI_FORMAT_B8G8R8X8_UNORM;
-        case DXGI_FORMAT_BC6H_TYPELESS:
-            return DXGI_FORMAT_BC6H_UF16;
-        case DXGI_FORMAT_BC7_TYPELESS:
-            return DXGI_FORMAT_BC7_UNORM;
         case DXGI_FORMAT_R32_TYPELESS:
-            return DXGI_FORMAT_R32_FLOAT;
-        case DXGI_FORMAT_R16_TYPELESS:
-            return DXGI_FORMAT_R16_UNORM;
-        case DXGI_FORMAT_R8_TYPELESS:
-            return DXGI_FORMAT_R8_UNORM;
-        default:
+        case DXGI_FORMAT_R32_FLOAT:
+        case DXGI_FORMAT_R32_UINT:
+        case DXGI_FORMAT_R32_SINT:
             return format;
+            
+        case DXGI_FORMAT_R16_TYPELESS:
+        case DXGI_FORMAT_R16_FLOAT:
+        case DXGI_FORMAT_R16_UNORM:
+        case DXGI_FORMAT_R16_UINT:
+        case DXGI_FORMAT_R16_SNORM:
+        case DXGI_FORMAT_R16_SINT:
+            return format;
+            
+        case DXGI_FORMAT_R8_TYPELESS:
+        case DXGI_FORMAT_R8_UNORM:
+        case DXGI_FORMAT_R8_UINT:
+        case DXGI_FORMAT_R8_SNORM:
+        case DXGI_FORMAT_R8_SINT:
+            return format;
+            
+        // Add more format mappings as needed
+        
+        default:
+            // For unknown/unsupported formats, fall back to R32_FLOAT
+            WARN("Unsupported format %d, falling back to R32_FLOAT", format);
+            return DXGI_FORMAT_R32_FLOAT;
     }
 }
 
@@ -494,6 +478,30 @@ D3D11_USAGE WrappedD3D12ToD3D11Resource::GetD3D11Usage(
             return D3D11_USAGE_DEFAULT;
         default:
             return D3D11_USAGE_DEFAULT;
+    }
+}
+
+UINT WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags(const D3D12_HEAP_PROPERTIES* pHeapProperties) {
+    TRACE("WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags called");
+    switch (pHeapProperties->Type) {
+        case D3D12_HEAP_TYPE_DEFAULT:
+            return 0;
+        case D3D12_HEAP_TYPE_UPLOAD:
+            return D3D11_CPU_ACCESS_WRITE;
+        case D3D12_HEAP_TYPE_READBACK:
+            return D3D11_CPU_ACCESS_READ;
+        case D3D12_HEAP_TYPE_CUSTOM:
+            if (pHeapProperties->CPUPageProperty ==
+                D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) {
+                return D3D11_CPU_ACCESS_WRITE;
+            }
+            if (pHeapProperties->CPUPageProperty ==
+                D3D12_CPU_PAGE_PROPERTY_WRITE_BACK) {
+                return D3D11_CPU_ACCESS_READ;
+            }
+            return 0;
+        default:
+            return 0;
     }
 }
 

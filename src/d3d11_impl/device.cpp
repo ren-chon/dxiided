@@ -176,6 +176,82 @@ ULONG STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::Release() {
     return ref;
 }
 
+UINT GetFormatByteSize(DXGI_FORMAT format) {
+    TRACE("GetFormatByteSize for format %d", format);
+    switch (format) {
+        case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+        case DXGI_FORMAT_R32G32B32A32_FLOAT:
+        case DXGI_FORMAT_R32G32B32A32_UINT:
+        case DXGI_FORMAT_R32G32B32A32_SINT:
+            TRACE("  R32G32B32A32 format -> 16 bytes");
+            return 16;
+
+        case DXGI_FORMAT_R32G32B32_TYPELESS:
+        case DXGI_FORMAT_R32G32B32_FLOAT:
+        case DXGI_FORMAT_R32G32B32_UINT:
+        case DXGI_FORMAT_R32G32B32_SINT:
+            TRACE("  R32G32B32 format -> 12 bytes");
+            return 12;
+
+        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+        case DXGI_FORMAT_R16G16B16A16_UINT:
+        case DXGI_FORMAT_R16G16B16A16_SNORM:
+        case DXGI_FORMAT_R16G16B16A16_SINT:
+        case DXGI_FORMAT_R32G32_TYPELESS:
+        case DXGI_FORMAT_R32G32_FLOAT:
+        case DXGI_FORMAT_R32G32_UINT:
+        case DXGI_FORMAT_R32G32_SINT:
+            return 8;
+
+        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        case DXGI_FORMAT_R8G8B8A8_UINT:
+        case DXGI_FORMAT_R8G8B8A8_SNORM:
+        case DXGI_FORMAT_R8G8B8A8_SINT:
+        case DXGI_FORMAT_R16G16_TYPELESS:
+        case DXGI_FORMAT_R16G16_FLOAT:
+        case DXGI_FORMAT_R16G16_UNORM:
+        case DXGI_FORMAT_R16G16_UINT:
+        case DXGI_FORMAT_R16G16_SNORM:
+        case DXGI_FORMAT_R16G16_SINT:
+        case DXGI_FORMAT_R32_TYPELESS:
+        case DXGI_FORMAT_D32_FLOAT:
+        case DXGI_FORMAT_R32_FLOAT:
+        case DXGI_FORMAT_R32_UINT:
+        case DXGI_FORMAT_R32_SINT:
+            return 4;
+
+        case DXGI_FORMAT_R8G8_TYPELESS:
+        case DXGI_FORMAT_R8G8_UNORM:
+        case DXGI_FORMAT_R8G8_UINT:
+        case DXGI_FORMAT_R8G8_SNORM:
+        case DXGI_FORMAT_R8G8_SINT:
+        case DXGI_FORMAT_R16_TYPELESS:
+        case DXGI_FORMAT_R16_FLOAT:
+        case DXGI_FORMAT_D16_UNORM:
+        case DXGI_FORMAT_R16_UNORM:
+        case DXGI_FORMAT_R16_UINT:
+        case DXGI_FORMAT_R16_SNORM:
+        case DXGI_FORMAT_R16_SINT:
+            return 2;
+
+        case DXGI_FORMAT_R8_TYPELESS:
+        case DXGI_FORMAT_R8_UNORM:
+        case DXGI_FORMAT_R8_UINT:
+        case DXGI_FORMAT_R8_SNORM:
+        case DXGI_FORMAT_R8_SINT:
+        case DXGI_FORMAT_A8_UNORM:
+            return 1;
+
+        default:
+            ERR("Unknown format %d (0x%x)", format, format);
+            return 4;  // Default to 4 bytes instead of 0 to avoid division by zero
+    }
+}
+
 // ID3D12Object methods
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetPrivateData(REFGUID guid,
                                                       UINT* pDataSize,
@@ -488,93 +564,160 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateShaderResourceView(
     TRACE("WrappedD3D12ToD3D11Device::CreateShaderResourceView called");
     TRACE("  Resource: %p", pResource);
     if (pDesc) {
-        TRACE("  Format: %p", pDesc->Format);
+        TRACE("  Format: %#010x", pDesc->Format);
         TRACE("  ViewDimension: %d", pDesc->ViewDimension);
-        TRACE("  Shader4ComponentMapping: %d", pDesc->Shader4ComponentMapping);
+        TRACE("  Shader4ComponentMapping: %#x", pDesc->Shader4ComponentMapping);
         TRACE("  Buffer FirstElement: %u", pDesc->Buffer.FirstElement);
         TRACE("  Buffer NumElements: %u", pDesc->Buffer.NumElements);
         TRACE("  Texture2D MipLevels: %u", pDesc->Texture2D.MipLevels);
     }
-    TRACE("  DestDescriptor: %p", (void*)DestDescriptor.ptr);
+    TRACE("  DestDescriptor: %p", DestDescriptor.ptr);
 
+    // Handle null resource case
     if (!pResource) {
-        // Some D3D12 applications create placeholder SRVs with null resources
-        // Store a null view in the descriptor
-        TRACE("Creating placeholder SRV for null resource");
+        TRACE("Creating null SRV");
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> nullView;
+        D3D11_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
+        
+        if (pDesc) {
+            nullDesc.Format = pDesc->Format != DXGI_FORMAT_UNKNOWN ? 
+                             pDesc->Format : DXGI_FORMAT_R32_FLOAT;
+            nullDesc.ViewDimension = static_cast<D3D11_SRV_DIMENSION>(pDesc->ViewDimension);
+            
+            switch (pDesc->ViewDimension) {
+                case D3D12_SRV_DIMENSION_BUFFER:
+                    nullDesc.Buffer.FirstElement = pDesc->Buffer.FirstElement;
+                    nullDesc.Buffer.NumElements = pDesc->Buffer.NumElements;
+                    break;
+                case D3D12_SRV_DIMENSION_TEXTURE2D:
+                    nullDesc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
+                    nullDesc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            nullDesc.Format = DXGI_FORMAT_R32_FLOAT;
+            nullDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+            nullDesc.Buffer.FirstElement = 0;
+            nullDesc.Buffer.NumElements = 1;
+        }
+
+        // Store null view in descriptor heap
         auto* descriptor = reinterpret_cast<ID3D11ShaderResourceView**>(DestDescriptor.ptr);
         *descriptor = nullptr;
         return;
     }
 
-    ID3D11Resource* d3d11Resource = GetD3D11Resource(pResource);
+    auto* wrappedResource = static_cast<WrappedD3D12ToD3D11Resource*>(pResource);
+    ID3D11Resource* d3d11Resource = wrappedResource->GetD3D11Resource();
+
     if (!d3d11Resource) {
-        ERR("D3D11 resource not found for D3D12 resource %p", pResource);
+        ERR("Invalid D3D11 resource");
         return;
     }
 
-    // Check resource bind flags
-    D3D11_RESOURCE_DIMENSION dimension;
-    d3d11Resource->GetType(&dimension);
-    
-    if (dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-        if (SUCCEEDED(d3d11Resource->QueryInterface(IID_PPV_ARGS(&texture)))) {
-            D3D11_TEXTURE2D_DESC desc;
-            texture->GetDesc(&desc);
-            
-            TRACE("D3D11 Resource properties:");
-            TRACE("  Format: %d", desc.Format);
-            TRACE("  BindFlags: %d", desc.BindFlags);
-            TRACE("  MipLevels: %d", desc.MipLevels);
-            
-            if (!(desc.BindFlags & D3D11_BIND_SHADER_RESOURCE)) {
-                ERR("Resource was not created with D3D11_BIND_SHADER_RESOURCE flag (flags=%d)", desc.BindFlags);
-                return;
-            }
-        }
-    }
-
-    TRACE("Creating SRV with format %d, dimension %d", pDesc->Format, pDesc->ViewDimension);
-    
     D3D11_SHADER_RESOURCE_VIEW_DESC d3d11Desc = {};
-    d3d11Desc.Format = static_cast<DXGI_FORMAT>(pDesc->Format);
+    
+    if (pDesc) {
+        d3d11Desc.Format = pDesc->Format != DXGI_FORMAT_UNKNOWN ? 
+                          pDesc->Format : DXGI_FORMAT_R32_FLOAT;
+        d3d11Desc.ViewDimension = static_cast<D3D11_SRV_DIMENSION>(pDesc->ViewDimension);
 
-    switch (pDesc->ViewDimension) {
-        case D3D12_SRV_DIMENSION_BUFFER:
-        case D3D12_SRV_DIMENSION_TEXTURE1D: {  // Handle 1D textures that are actually buffers
-            TRACE("Creating buffer SRV, elements: %u", pDesc->Buffer.NumElements);
-            d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-            d3d11Desc.Buffer.FirstElement = pDesc->Buffer.FirstElement;
-            d3d11Desc.Buffer.NumElements = pDesc->Buffer.NumElements;
-            break;
+        TRACE("Creating SRV with format %d, dimension %d", 
+              d3d11Desc.Format, d3d11Desc.ViewDimension);
+
+        switch (pDesc->ViewDimension) {
+            case D3D12_SRV_DIMENSION_BUFFER: {
+                d3d11Desc.Buffer.FirstElement = pDesc->Buffer.FirstElement;
+                d3d11Desc.Buffer.NumElements = pDesc->Buffer.NumElements;
+
+                // Get buffer size
+                D3D11_BUFFER_DESC bufferDesc;
+                ID3D11Buffer* buffer;
+                if (SUCCEEDED(d3d11Resource->QueryInterface(__uuidof(ID3D11Buffer), 
+                    (void**)&buffer))) {
+                    buffer->GetDesc(&bufferDesc);
+                    buffer->Release();
+
+                    // Use format size to validate element count
+                    UINT formatSize = GetFormatByteSize(d3d11Desc.Format);
+                    if (formatSize > 0) {
+                        UINT maxElements = bufferDesc.ByteWidth / formatSize;
+                        if (d3d11Desc.Buffer.NumElements > maxElements) {
+                            WARN("NumElements %u exceeds max possible elements %u for buffer size %u and format size %u",
+                                d3d11Desc.Buffer.NumElements, maxElements, 
+                                bufferDesc.ByteWidth, formatSize);
+                            d3d11Desc.Buffer.NumElements = maxElements;
+                        }
+                    }
+                }
+                break;
+            }
+            case D3D12_SRV_DIMENSION_TEXTURE2D: {
+                d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
+                d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;
+                break;
+            }
+            default:
+                ERR("Unsupported view dimension: %d", pDesc->ViewDimension);
+                return;
         }
-        case D3D12_SRV_DIMENSION_TEXTURE2D: {
-            TRACE("D3D12_SRV_DIMENSION_TEXTURE2D matched");
-            d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            d3d11Desc.Texture2D.MostDetailedMip = pDesc->Texture2D.MostDetailedMip;
-            d3d11Desc.Texture2D.MipLevels = pDesc->Texture2D.MipLevels;  // Use D3D12's requested mip levels
-            break;
+    } else {
+        // Create default view desc based on resource type
+        D3D11_RESOURCE_DIMENSION resourceDim;
+        d3d11Resource->GetType(&resourceDim);
+        
+        switch (resourceDim) {
+            case D3D11_RESOURCE_DIMENSION_BUFFER: {
+                D3D11_BUFFER_DESC bufferDesc;
+                ID3D11Buffer* buffer;
+                if (SUCCEEDED(d3d11Resource->QueryInterface(__uuidof(ID3D11Buffer), 
+                    (void**)&buffer))) {
+                    buffer->GetDesc(&bufferDesc);
+                    buffer->Release();
+                    
+                    d3d11Desc.Format = DXGI_FORMAT_R32_FLOAT;
+                    d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+                    d3d11Desc.Buffer.FirstElement = 0;
+                    d3d11Desc.Buffer.NumElements = bufferDesc.ByteWidth / 4;
+                }
+                break;
+            }
+            case D3D11_RESOURCE_DIMENSION_TEXTURE2D: {
+                D3D11_TEXTURE2D_DESC texDesc;
+                ID3D11Texture2D* tex;
+                if (SUCCEEDED(d3d11Resource->QueryInterface(__uuidof(ID3D11Texture2D), 
+                    (void**)&tex))) {
+                    tex->GetDesc(&texDesc);
+                    tex->Release();
+                    
+                    d3d11Desc.Format = texDesc.Format;
+                    d3d11Desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                    d3d11Desc.Texture2D.MostDetailedMip = 0;
+                    d3d11Desc.Texture2D.MipLevels = texDesc.MipLevels;
+                }
+                break;
+            }
+            default:
+                ERR("Unsupported resource dimension for default view creation");
+                return;
         }
-        default:
-            ERR("Unsupported view dimension: %d", pDesc->ViewDimension);
-            return;
     }
 
     TRACE("Store view in descriptor heap");
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
     HRESULT hr = m_d3d11Device->CreateShaderResourceView(
         d3d11Resource,
-        &d3d11Desc,  // Always use our translated description
+        &d3d11Desc,
         &srv);
     if (FAILED(hr)) {
         ERR("Failed to create D3D11 shader resource view, hr %#x", hr);
         return;
     }
 
-    TRACE("Store view in descriptor heap");
     // Store view in descriptor heap
-    auto* descriptor =
-        reinterpret_cast<ID3D11ShaderResourceView**>(DestDescriptor.ptr);
+    auto* descriptor = reinterpret_cast<ID3D11ShaderResourceView**>(DestDescriptor.ptr);
     *descriptor = srv.Detach();
 }
 
@@ -993,9 +1136,72 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetDeviceRemovedReason() {
     return S_OK;
 }
 
+void WrappedD3D12ToD3D11Device::StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    m_d3d12ToD3d11Resources[d3d12Resource] = d3d11Resource;
+    m_d3d11ToD3d12Resources[d3d11Resource] = d3d12Resource;
+}
 
-// Forward declare the helper function
-UINT GetFormatByteSize(DXGI_FORMAT format);
+ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    auto it = m_d3d12ToD3d11Resources.find(d3d12Resource);
+    return (it != m_d3d12ToD3d11Resources.end()) ? it->second : nullptr;
+}
+
+ID3D12Resource* WrappedD3D12ToD3D11Device::GetD3D12Resource(ID3D11Resource* d3d11Resource) {
+    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
+    auto it = m_d3d11ToD3d12Resources.find(d3d11Resource);
+    return (it != m_d3d11ToD3d12Resources.end()) ? it->second : nullptr;
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Device::AllocateGPUVirtualAddress(void* resource, UINT64 size) {
+    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
+    
+    // Start from a lower address for older iGPUs
+    if (m_nextGPUAddress == 0) {
+        // Start at 1MB mark instead of 4GB for better compatibility
+        m_nextGPUAddress = 0x100000ULL;  // 1MB mark
+    }
+
+    // Ensure minimum alignment of 256 bytes as required by D3D12
+    size = (size + 255) & ~255;
+    
+    // Check for address space overflow
+    if (m_nextGPUAddress + size < m_nextGPUAddress) {
+        ERR("GPU virtual address space overflow");
+        return 0;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS address = m_nextGPUAddress;
+    m_gpuAddressMap[address] = std::make_pair(resource, size);
+    
+    m_nextGPUAddress += size;
+    
+    TRACE("Allocated GPU virtual address %llx for resource %p with size %llu", address, resource, size);
+    return address;
+}
+
+void WrappedD3D12ToD3D11Device::FreeGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
+    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
+    
+    auto it = m_gpuAddressMap.find(address);
+    if (it != m_gpuAddressMap.end()) {
+        TRACE("Freed GPU virtual address %llx for resource %p", address, it->second.first);
+        m_gpuAddressMap.erase(it);
+    }
+}
+
+void* WrappedD3D12ToD3D11Device::GetResourceFromGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
+    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
+    
+    auto it = m_gpuAddressMap.find(address);
+    if (it != m_gpuAddressMap.end()) {
+        return it->second.first;
+    }
+    
+    WARN("No resource found for GPU virtual address %llx", address);
+    return nullptr;
+}
 
 void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
     const D3D12_RESOURCE_DESC* pResourceDesc, UINT FirstSubresource,
@@ -1026,7 +1232,7 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
     // Get format information
     UINT formatByteSize = GetFormatByteSize(format);
     if (formatByteSize == 0) {
-        ERR("Unsupported format %d", format);
+        ERR("Unsupported format: %d", format);
         return;
     }
 
@@ -1073,79 +1279,6 @@ void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
 
     if (pTotalBytes) {
         *pTotalBytes = totalSize;
-    }
-}
-
-UINT GetFormatByteSize(DXGI_FORMAT format) {
-    switch (format) {
-        case DXGI_FORMAT_R32G32B32A32_TYPELESS:
-        case DXGI_FORMAT_R32G32B32A32_FLOAT:
-        case DXGI_FORMAT_R32G32B32A32_UINT:
-        case DXGI_FORMAT_R32G32B32A32_SINT:
-            return 16;
-
-        case DXGI_FORMAT_R32G32B32_TYPELESS:
-        case DXGI_FORMAT_R32G32B32_FLOAT:
-        case DXGI_FORMAT_R32G32B32_UINT:
-        case DXGI_FORMAT_R32G32B32_SINT:
-            return 12;
-
-        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
-        case DXGI_FORMAT_R16G16B16A16_FLOAT:
-        case DXGI_FORMAT_R16G16B16A16_UNORM:
-        case DXGI_FORMAT_R16G16B16A16_UINT:
-        case DXGI_FORMAT_R16G16B16A16_SNORM:
-        case DXGI_FORMAT_R16G16B16A16_SINT:
-        case DXGI_FORMAT_R32G32_TYPELESS:
-        case DXGI_FORMAT_R32G32_FLOAT:
-        case DXGI_FORMAT_R32G32_UINT:
-        case DXGI_FORMAT_R32G32_SINT:
-            return 8;
-
-        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
-        case DXGI_FORMAT_R8G8B8A8_UNORM:
-        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-        case DXGI_FORMAT_R8G8B8A8_UINT:
-        case DXGI_FORMAT_R8G8B8A8_SNORM:
-        case DXGI_FORMAT_R8G8B8A8_SINT:
-        case DXGI_FORMAT_R16G16_TYPELESS:
-        case DXGI_FORMAT_R16G16_FLOAT:
-        case DXGI_FORMAT_R16G16_UNORM:
-        case DXGI_FORMAT_R16G16_UINT:
-        case DXGI_FORMAT_R16G16_SNORM:
-        case DXGI_FORMAT_R16G16_SINT:
-        case DXGI_FORMAT_R32_TYPELESS:
-        case DXGI_FORMAT_D32_FLOAT:
-        case DXGI_FORMAT_R32_FLOAT:
-        case DXGI_FORMAT_R32_UINT:
-        case DXGI_FORMAT_R32_SINT:
-            return 4;
-
-        case DXGI_FORMAT_R8G8_TYPELESS:
-        case DXGI_FORMAT_R8G8_UNORM:
-        case DXGI_FORMAT_R8G8_UINT:
-        case DXGI_FORMAT_R8G8_SNORM:
-        case DXGI_FORMAT_R8G8_SINT:
-        case DXGI_FORMAT_R16_TYPELESS:
-        case DXGI_FORMAT_R16_FLOAT:
-        case DXGI_FORMAT_D16_UNORM:
-        case DXGI_FORMAT_R16_UNORM:
-        case DXGI_FORMAT_R16_UINT:
-        case DXGI_FORMAT_R16_SNORM:
-        case DXGI_FORMAT_R16_SINT:
-            return 2;
-
-        case DXGI_FORMAT_R8_TYPELESS:
-        case DXGI_FORMAT_R8_UNORM:
-        case DXGI_FORMAT_R8_UINT:
-        case DXGI_FORMAT_R8_SNORM:
-        case DXGI_FORMAT_R8_SINT:
-        case DXGI_FORMAT_A8_UNORM:
-            return 1;
-
-        default:
-            ERR("Unknown format %d", format);
-            return 0;
     }
 }
 
@@ -1414,6 +1547,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateDepthStencilView(
     return m_d3d11Device->CreateDepthStencilView(pResource, pDesc,
                                                  ppDepthStencilView);
 }
+
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateInputLayout(
     const D3D11_INPUT_ELEMENT_DESC* pInputElementDescs, UINT NumElements,
     const void* pShaderBytecodeWithInputSignature, SIZE_T BytecodeLength,
@@ -1461,6 +1595,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreatePixelShader(
     return m_d3d11Device->CreatePixelShader(pShaderBytecode, BytecodeLength,
                                             pClassLinkage, ppPixelShader);
 }
+
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateHullShader(
     const void* pShaderBytecode, SIZE_T BytecodeLength,
     ID3D11ClassLinkage* pClassLinkage, ID3D11HullShader** ppHullShader) {
@@ -1496,6 +1631,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateBlendState(
         TRACE("WrappedD3D12ToD3D11Device::CreateBlendState called on object %p", this);
     return m_d3d11Device->CreateBlendState(pBlendStateDesc, ppBlendState);
 }
+
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateDepthStencilState(
     const D3D11_DEPTH_STENCIL_DESC* pDepthStencilDesc,
     ID3D11DepthStencilState** ppDepthStencilState) {
@@ -1530,6 +1666,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreatePredicate(
     TRACE("WrappedD3D12ToD3D11Device::CreatePredicate called on object %p", this);
     return m_d3d11Device->CreatePredicate(pPredicateDesc, ppPredicate);
 }
+
 HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CreateCounter(
     const D3D11_COUNTER_DESC* pCounterDesc, ID3D11Counter** ppCounter) {
     TRACE("WrappedD3D12ToD3D11Device::CreateCounter called on object %p", this);
@@ -1561,6 +1698,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::CheckMultisampleQualityLeve
     return m_d3d11Device->CheckMultisampleQualityLevels(Format, SampleCount,
                                                         pNumQualityLevels);
 }
+
 void STDMETHODCALLTYPE
 WrappedD3D12ToD3D11Device::GetImmediateContext(ID3D11DeviceContext** ppImmediateContext) {
     TRACE("WrappedD3D12ToD3D11Device::GetImmediateContext called on object %p", this);
@@ -1638,6 +1776,7 @@ HRESULT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::OpenSharedResourceByName(
                      lpName, dwDesiredAccess, returnedInterface, ppResource)
                : E_NOTIMPL;
 }
+
 // ID3D11Device1 methods
 void STDMETHODCALLTYPE
 WrappedD3D12ToD3D11Device::GetImmediateContext1(ID3D11DeviceContext1** ppImmediateContext) {
@@ -1731,88 +1870,4 @@ UINT STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCreationFlags() {
     return m_d3d11Device ? m_d3d11Device->GetCreationFlags() : 0;
 }
 
-// ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
-//     TRACE("WrappedD3D12ToD3D11Device::GetD3D11Resource called on object %p", this);
-//     if (!d3d12Resource) {
-//         return nullptr;
-//     }
-
-//     // Try to get the D3D11 resource from the D3D12 resource's private data
-//     ID3D11Resource* d3d11Resource = nullptr;
-//     UINT dataSize = sizeof(ID3D11Resource*);
-
-//     if (SUCCEEDED(d3d12Resource->GetPrivateData(__uuidof(ID3D11Resource),
-//                                                 &dataSize, &d3d11Resource))) {
-//         return d3d11Resource;
-//     }
-
-//     ERR("D3D11 resource not found for D3D12 resource %p", d3d12Resource);
-//     return nullptr;
-// }
-
-void WrappedD3D12ToD3D11Device::StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource) {
-    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
-    m_d3d12ToD3d11Resources[d3d12Resource] = d3d11Resource;
-    m_d3d11ToD3d12Resources[d3d11Resource] = d3d12Resource;
-}
-
-ID3D11Resource* WrappedD3D12ToD3D11Device::GetD3D11Resource(ID3D12Resource* d3d12Resource) {
-    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
-    auto it = m_d3d12ToD3d11Resources.find(d3d12Resource);
-    return (it != m_d3d12ToD3d11Resources.end()) ? it->second : nullptr;
-}
-
-ID3D12Resource* WrappedD3D12ToD3D11Device::GetD3D12Resource(ID3D11Resource* d3d11Resource) {
-    std::lock_guard<std::mutex> lock(m_resourceMappingMutex);
-    auto it = m_d3d11ToD3d12Resources.find(d3d11Resource);
-    return (it != m_d3d11ToD3d12Resources.end()) ? it->second : nullptr;
-}
-D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Device::AllocateGPUVirtualAddress(void* resource, UINT64 size) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    // Start from a lower address for older iGPUs
-    if (m_nextGPUAddress == 0) {
-        // Start at 1MB mark instead of 4GB for better compatibility
-        m_nextGPUAddress = 0x100000ULL;  // 1MB mark
-    }
-
-    // Ensure minimum alignment of 256 bytes as required by D3D12
-    size = (size + 255) & ~255;
-    
-    // Check for address space overflow
-    if (m_nextGPUAddress + size < m_nextGPUAddress) {
-        ERR("GPU virtual address space overflow");
-        return 0;
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS address = m_nextGPUAddress;
-    m_gpuAddressMap[address] = std::make_pair(resource, size);
-    
-    m_nextGPUAddress += size;
-    
-    TRACE("Allocated GPU virtual address %llx for resource %p with size %llu", address, resource, size);
-    return address;
-}
-
-void WrappedD3D12ToD3D11Device::FreeGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    auto it = m_gpuAddressMap.find(address);
-    if (it != m_gpuAddressMap.end()) {
-        TRACE("Freed GPU virtual address %llx for resource %p", address, it->second.first);
-        m_gpuAddressMap.erase(it);
-    }
-}
-
-void* WrappedD3D12ToD3D11Device::GetResourceFromGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    auto it = m_gpuAddressMap.find(address);
-    if (it != m_gpuAddressMap.end()) {
-        return it->second.first;
-    }
-    
-    WARN("No resource found for GPU virtual address %llx", address);
-    return nullptr;
-}
 }  // namespace dxiided
