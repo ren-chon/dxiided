@@ -93,6 +93,7 @@ class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
                                 ID3D11Resource* resource,
                                 const D3D12_RESOURCE_DESC* pDesc,
                                 D3D12_RESOURCE_STATES InitialState);
+    ~WrappedD3D12ToD3D11Resource();
 
     static D3D11_BIND_FLAG GetD3D11BindFlags(const D3D12_RESOURCE_DESC* pDesc);
     static DXGI_FORMAT GetViewFormat(DXGI_FORMAT format);

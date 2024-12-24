@@ -63,9 +63,10 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
       m_desc(*pDesc),
       m_heapProperties(*pHeapProperties),
       m_heapFlags(HeapFlags),
-      m_currentState(InitialState) {
-    TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u",
-          pDesc->Dimension, pDesc->Format, pDesc->Width, pDesc->Height);
+      m_currentState(InitialState),
+      m_gpuAddress(0) {
+    TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
+          pDesc->Dimension, pDesc->Format, pDesc->Width, pDesc->Height, this);
 
     D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc);
     D3D11_USAGE usage = GetD3D11Usage(pHeapProperties);
@@ -114,6 +115,13 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                 return;
             }
             m_resource = buffer;
+            // Only assign GPU virtual address for buffers
+            if (SUCCEEDED(hr)) {
+                // Only allocate GPU virtual address for buffers that can be accessed by shaders
+                if (bindFlags & (D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
+                    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, static_cast<UINT64>(pDesc->Width));
+                }
+            }
             StoreInDeviceMap();
             break;
         }
@@ -213,31 +221,56 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                             D3D12_RESOURCE_STATES InitialState)
     : m_device(device)
     , m_desc(*pDesc)
-    , m_state(InitialState) {
+    , m_gpuAddress(0)
+    , m_currentState(InitialState)
+    , m_isUAV(false) {
     
     if (resource) {
         m_resource = resource;
+        
+        // Check if this is a buffer that needs GPU virtual address
+        if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+            D3D11_BUFFER_DESC bufferDesc = {};
+            Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+            if (SUCCEEDED(resource->QueryInterface(IID_PPV_ARGS(&buffer)))) {
+                buffer->GetDesc(&bufferDesc);
+                
+                // Allocate GPU virtual address if buffer can be accessed by shaders
+                if (bufferDesc.BindFlags & (D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
+                    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, static_cast<UINT64>(pDesc->Width));
+                    TRACE("Allocated GPU virtual address %llx for existing buffer", m_gpuAddress);
+                }
+            }
+        }
+        
         StoreInDeviceMap();
     }
 }
 
+WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
+    TRACE("Destroying resource this=%p, gpuAddress=%llu", this, m_gpuAddress);
+    if (m_gpuAddress) {
+        m_device->FreeGPUVirtualAddress(m_gpuAddress);
+        m_gpuAddress = 0;  // Clear it to help catch use-after-free
+    }
+}
+
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
+    TRACE("StoreInDeviceMap for resource %p, type: %d", this, m_desc.Dimension);
+    
     // Store D3D11<->D3D12 resource mapping
     Microsoft::WRL::ComPtr<ID3D11Resource> d3d11Resource;
     if (SUCCEEDED(m_resource.As(&d3d11Resource))) {
         m_device->StoreD3D11ResourceMapping(this, d3d11Resource.Get());
-        TRACE("Stored D3D11<->D3D12 resource mapping for %p <-> %p", this, d3d11Resource.Get());
         
-        // For buffer resources, get the GPU virtual address
-        D3D11_RESOURCE_DIMENSION dimension;
-        d3d11Resource->GetType(&dimension);
-        if (dimension == D3D11_RESOURCE_DIMENSION_BUFFER) {
+        // Extra debug info for buffers
+        if (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-            if (SUCCEEDED(d3d11Resource.As(&buffer))) {
-                D3D11_BUFFER_DESC desc;
+            if (SUCCEEDED(m_resource.As(&buffer))) {
+                D3D11_BUFFER_DESC desc = {};
                 buffer->GetDesc(&desc);
-                // Use buffer address as GPU virtual address for D3D12 compatibility
-                m_gpuAddress = reinterpret_cast<D3D12_GPU_VIRTUAL_ADDRESS>(buffer.Get());
+                TRACE("  Buffer info - BindFlags: %u, ByteWidth: %u, Usage: %d", 
+                      desc.BindFlags, desc.ByteWidth, desc.Usage);
             }
         }
     }
@@ -607,7 +640,30 @@ D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* p
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
-    TRACE("WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress called");
+    TRACE("GetGPUVirtualAddress called for resource %p", this);
+    
+    // Only buffers should have GPU addresses
+    if (m_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
+        ERR("GetGPUVirtualAddress called on non-buffer resource type %d", m_desc.Dimension);
+        return 0;
+    }
+
+    TRACE("  m_gpuAddress: %llu, resource type: %d, width: %llu", 
+          m_gpuAddress, m_desc.Dimension, m_desc.Width);
+
+    if (m_gpuAddress < 0x100000ULL) {
+        ERR("Invalid GPU address %llu for resource %p", m_gpuAddress, this);
+        
+        // Try to get bind flags for debugging
+        D3D11_BUFFER_DESC bufferDesc = {};
+        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+        if (SUCCEEDED(m_resource.As(&buffer))) {
+            buffer->GetDesc(&bufferDesc);
+            ERR("  Buffer bind flags: %u, size: %u", bufferDesc.BindFlags, bufferDesc.ByteWidth);
+        }
+        
+        return 0;
+    }
     return m_gpuAddress;
 }
 
