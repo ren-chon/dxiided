@@ -65,8 +65,17 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
       m_heapFlags(HeapFlags),
       m_currentState(InitialState),
       m_gpuAddress(0) {
+    
+    // If it looks like a buffer (1D with height=1), treat it as one
+    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && 
+        pDesc->Height == 1 && 
+        pDesc->DepthOrArraySize == 1) {
+        TRACE("Converting 1D texture with height=1 to buffer");
+        m_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    }
+
     TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
-          pDesc->Dimension, pDesc->Format, pDesc->Width, pDesc->Height, this);
+          m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
 
     D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(pDesc);
     D3D11_USAGE usage = GetD3D11Usage(pHeapProperties);
@@ -89,7 +98,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
         format = GetViewFormat(format);
     }
 
-    switch (pDesc->Dimension) {
+    switch (m_desc.Dimension) {
         case D3D12_RESOURCE_DIMENSION_BUFFER: {
             TRACE("D3D12_RESOURCE_DIMENSION_BUFFER match");
             D3D11_BUFFER_DESC bufferDesc = {};
@@ -374,32 +383,41 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
     TRACE("WrappedD3D12ToD3D11Resource::GetD3D11BindFlags called");
     D3D11_BIND_FLAG flags = static_cast<D3D11_BIND_FLAG>(0);
 
-    // For swap chain buffers, we need both RT and SRV capabilities
-    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET");
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_RENDER_TARGET);
-
-        // If it's a render target and not explicitly denied shader resource,
-        // assume it needs shader resource capability (common for swap chains)
-        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-            TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
-            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
+    // For buffers, be more selective about bind flags based on size and alignment
+    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER || 
+        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && pDesc->Height == 1)) {
+        TRACE("Resource is a buffer or 1D resource with height=1");
+        
+        // For small buffers (<1KB), assume vertex/index buffer
+        if (pDesc->Width <= 1024) {
+            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER);
+        }
+        // For larger aligned buffers that allow shader access, could be constant buffer
+        else if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) && 
+                 pDesc->Width >= 256 && (pDesc->Width % 16) == 0) {
+            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_CONSTANT_BUFFER);
         }
     }
 
-    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-        TRACE("pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL");
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_DEPTH_STENCIL);
-    }
+    // Add UAV flag if requested
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
     }
-    
-    // For non-render targets, add shader resource if not denied
-    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) && 
-        !(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-            TRACE("!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)");
+
+    // Add shader resource view if not denied and we don't already have constant buffer
+    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
+        !(flags & D3D11_BIND_CONSTANT_BUFFER)) {
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
+    }
+
+    // For render targets
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) {
+        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_RENDER_TARGET);
+    }
+
+    // For depth-stencil
+    if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
+        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_DEPTH_STENCIL);
     }
 
     TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x", pDesc->Flags, flags);
@@ -644,26 +662,28 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     
     // Only buffers should have GPU addresses
     if (m_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
-        ERR("GetGPUVirtualAddress called on non-buffer resource type %d", m_desc.Dimension);
+        ERR("GetGPUVirtualAddress called on non-buffer resource type %d, width: %llu", 
+            m_desc.Dimension, m_desc.Width);
+        return 0;
+    }
+
+    // Get D3D11 buffer description for debugging
+    D3D11_BUFFER_DESC bufferDesc = {};
+    Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+    if (SUCCEEDED(m_resource.As(&buffer))) {
+        buffer->GetDesc(&bufferDesc);
+        TRACE("  Buffer info - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
+              bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
+    }
+
+    if (m_gpuAddress < 0x100000ULL) {
+        ERR("Invalid GPU address %llu for resource %p", m_gpuAddress, this);
+        ERR("  Buffer bind flags: %#x, size: %u", bufferDesc.BindFlags, bufferDesc.ByteWidth);
         return 0;
     }
 
     TRACE("  m_gpuAddress: %llu, resource type: %d, width: %llu", 
           m_gpuAddress, m_desc.Dimension, m_desc.Width);
-
-    if (m_gpuAddress < 0x100000ULL) {
-        ERR("Invalid GPU address %llu for resource %p", m_gpuAddress, this);
-        
-        // Try to get bind flags for debugging
-        D3D11_BUFFER_DESC bufferDesc = {};
-        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-        if (SUCCEEDED(m_resource.As(&buffer))) {
-            buffer->GetDesc(&bufferDesc);
-            ERR("  Buffer bind flags: %u, size: %u", bufferDesc.BindFlags, bufferDesc.ByteWidth);
-        }
-        
-        return 0;
-    }
     return m_gpuAddress;
 }
 
