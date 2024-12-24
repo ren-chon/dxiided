@@ -377,18 +377,19 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
     TRACE("WrappedD3D12ToD3D11Resource::GetD3D11BindFlags called");
     D3D11_BIND_FLAG flags = static_cast<D3D11_BIND_FLAG>(0);
 
-    // For buffers, be more selective about bind flags based on size and alignment
+    // For buffers, set appropriate bind flags based on size and alignment
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER || 
         (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && pDesc->Height == 1)) {
         TRACE("Resource is a buffer or 1D resource with height=1");
         
-        // For small buffers (<1KB), assume vertex/index buffer
-        if (pDesc->Width <= 1024) {
-            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER);
+        // For small buffers (<4KB), could be vertex or index buffer
+        if (pDesc->Width <= 4096) {
+            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER);
         }
-        // For larger aligned buffers that allow shader access, could be constant buffer
-        else if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) && 
-                 pDesc->Width >= 256 && (pDesc->Width % 16) == 0) {
+        
+        // For aligned buffers, could be constant buffer regardless of size
+        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) && 
+            (pDesc->Width % 16) == 0) {
             flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_CONSTANT_BUFFER);
         }
     }
@@ -399,8 +400,7 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
     }
 
     // Add shader resource view if not denied and we don't already have constant buffer
-    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
-        !(flags & D3D11_BIND_CONSTANT_BUFFER)) {
+    if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
     }
 
@@ -428,8 +428,18 @@ DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
         case DXGI_FORMAT_R8G8B8A8_SNORM:
         case DXGI_FORMAT_R16G16B16A16_SNORM:
             return format;
+
+        // For buffer SRVs, handle typed buffer formats
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R32G32B32A32_FLOAT:
+        case DXGI_FORMAT_R32_FLOAT:
+        // Add structured buffer formats
+        case DXGI_FORMAT_R16G16B16A16_SINT:
+        case DXGI_FORMAT_R32G32_FLOAT:
+        case DXGI_FORMAT_R32G32_UINT:
+        case DXGI_FORMAT_R32G32_SINT:
+            return format;
             
-        // Add other format mappings as needed
         default:
             WARN("Unsupported format %d, using original format", format);
             return format;
@@ -654,27 +664,48 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
         return 0;
     }
 
-    // Always allocate GPU address for buffers if not already allocated
-    if (!m_gpuAddress) {
-        D3D11_BUFFER_DESC bufferDesc = {};
-        Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-        
-        if (SUCCEEDED(m_resource.As(&buffer))) {
-            buffer->GetDesc(&bufferDesc);
-            TRACE("Allocating GPU address for buffer - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
-                  bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
-                  
-            // Allocate GPU address for all buffers
-            m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
-        }
+    // Return existing GPU address if already allocated
+    if (m_gpuAddress) {
+        TRACE("Returning existing GPU address %llu for resource %p", m_gpuAddress, this);
+        return m_gpuAddress;
     }
 
+    // Get buffer description
+    D3D11_BUFFER_DESC bufferDesc = {};
+    Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
+    
+    if (!m_resource) {
+        ERR("No D3D11 resource available for %p", this);
+        return 0;
+    }
+    
+    if (FAILED(m_resource.As(&buffer))) {
+        ERR("Failed to get ID3D11Buffer from resource %p", this);
+        return 0;
+    }
+
+    buffer->GetDesc(&bufferDesc);
+    TRACE("Getting GPU address for buffer - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
+          bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
+              
+    // Only allocate GPU address for shader-visible resources
+    if (!(bufferDesc.BindFlags & (D3D11_BIND_VERTEX_BUFFER |
+                                D3D11_BIND_INDEX_BUFFER |
+                                D3D11_BIND_CONSTANT_BUFFER |
+                                D3D11_BIND_SHADER_RESOURCE |
+                                D3D11_BIND_UNORDERED_ACCESS))) {
+        TRACE("Buffer %p does not need GPU address - bind flags %#x", this, bufferDesc.BindFlags);
+        return 0;
+    }
+    
+    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
+    
     if (!m_gpuAddress) {
         ERR("Failed to allocate GPU address for buffer resource %p", this);
         return 0;
     }
-
-    TRACE("Returning GPU address %llu for buffer resource %p", m_gpuAddress, this);
+    
+    TRACE("Allocated GPU address %llu for buffer resource %p", m_gpuAddress, this);
     return m_gpuAddress;
 }
 
