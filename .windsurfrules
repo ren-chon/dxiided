@@ -1,3 +1,4 @@
+- source files are in src/ directory and headers are in include/ directory
 - we're working on a d3d12 to d3d11 downgrade layer not the opposite
 - when you propose changes to one file, do not split edits in chunks
 ## Goal

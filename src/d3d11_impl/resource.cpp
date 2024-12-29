@@ -1,28 +1,33 @@
 #include "d3d11_impl/resource.hpp"
 
 #include "d3d11_impl/device.hpp"
+#include "d3d11_impl/gpu_va_mgr.hpp"
 
 namespace dxiided {
 
-HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
-                              const D3D12_HEAP_PROPERTIES* pHeapProperties,
-                              D3D12_HEAP_FLAGS HeapFlags,
-                              const D3D12_RESOURCE_DESC* pDesc,
-                              D3D12_RESOURCE_STATES InitialState,
-                              const D3D12_CLEAR_VALUE* pOptimizedClearValue,
-                              REFIID riid, void** ppvResource) {
+HRESULT WrappedD3D12ToD3D11Resource::Create(
+    WrappedD3D12ToD3D11Device* device,
+    const D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS HeapFlags,
+    const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState,
+    const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid,
+    void** ppvResource) {
     TRACE(
-        "WrappedD3D12ToD3D11Resource::Create called with: %p, %p, %#x, %p, %#x, %p, %s, %p",
+        "WrappedD3D12ToD3D11Resource::Create called with: %p, %p, %#x, %p, "
+        "%#x, %p, %s, %p",
         device, pHeapProperties, HeapFlags, pDesc, InitialState,
         pOptimizedClearValue, debugstr_guid(&riid).c_str(), ppvResource);
 
     if (!device || !pHeapProperties || !pDesc || !ppvResource) {
-        WARN("Invalid parameters: device: %d, pHeapProperties: %p, pDesc: %d, ppvResource: %r", device , pHeapProperties , pDesc , ppvResource);
+        WARN(
+            "Invalid parameters: device: %d, pHeapProperties: %p, pDesc: %d, "
+            "ppvResource: %r",
+            device, pHeapProperties, pDesc, ppvResource);
         return E_INVALIDARG;
     }
 
-    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> resource = new WrappedD3D12ToD3D11Resource(
-        device, pHeapProperties, HeapFlags, pDesc, InitialState);
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> resource =
+        new WrappedD3D12ToD3D11Resource(device, pHeapProperties, HeapFlags,
+                                        pDesc, InitialState);
 
     if (!resource->GetD3D11Resource()) {
         ERR("Failed to create D3D11 resource.");
@@ -33,18 +38,20 @@ HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
 }
 
 HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
-                             ID3D11Resource* resource,
-                             const D3D12_RESOURCE_DESC* pDesc,
-                             D3D12_RESOURCE_STATES InitialState,
-                             REFIID riid, void** ppvResource) {
+                                            ID3D11Resource* resource,
+                                            const D3D12_RESOURCE_DESC* pDesc,
+                                            D3D12_RESOURCE_STATES InitialState,
+                                            REFIID riid, void** ppvResource) {
     if (!device || !resource || !pDesc || !ppvResource) {
-        WARN("Invalid parameters: device=%p, resource=%p, pDesc=%p, ppvResource=%p",
-              device, resource, pDesc, ppvResource);
+        WARN(
+            "Invalid parameters: device=%p, resource=%p, pDesc=%p, "
+            "ppvResource=%p",
+            device, resource, pDesc, ppvResource);
         return E_INVALIDARG;
     }
 
-    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> wrapper = new WrappedD3D12ToD3D11Resource(
-        device, resource, pDesc, InitialState);
+    Microsoft::WRL::ComPtr<WrappedD3D12ToD3D11Resource> wrapper =
+        new WrappedD3D12ToD3D11Resource(device, resource, pDesc, InitialState);
 
     if (!wrapper->GetD3D11Resource()) {
         ERR("Failed to wrap D3D11 resource.");
@@ -54,28 +61,24 @@ HRESULT WrappedD3D12ToD3D11Resource::Create(WrappedD3D12ToD3D11Device* device,
     return wrapper.CopyTo(reinterpret_cast<ID3D12Resource**>(ppvResource));
 }
 
-WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
-                             const D3D12_HEAP_PROPERTIES* pHeapProperties,
-                             D3D12_HEAP_FLAGS HeapFlags,
-                             const D3D12_RESOURCE_DESC* pDesc,
-                             D3D12_RESOURCE_STATES InitialState)
+WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
+    WrappedD3D12ToD3D11Device* device,
+    const D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS HeapFlags,
+    const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState)
     : m_device(device),
       m_resource(nullptr),
       m_desc(*pDesc),
       m_heapProperties(*pHeapProperties),
       m_heapFlags(HeapFlags),
-      m_gpuAddress(0),
       m_refCount(1),
       m_currentState(InitialState),
       m_state(InitialState),
       m_isUAV(false),
       m_format(pDesc->Format) {
-    
     // If it looks like a buffer (1D with height=1), treat it as one
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
         (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
          pDesc->Height == 1)) {
-        
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
         bufferDesc.Usage = GetD3D11Usage(pHeapProperties);
@@ -85,7 +88,8 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
         bufferDesc.StructureByteStride = 0;
 
         // If this buffer will be used as SRV/UAV, set format
-        if (bufferDesc.BindFlags & (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
+        if (bufferDesc.BindFlags &
+            (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
             // If we know the format from resource desc, use that
             if (m_format == DXGI_FORMAT_UNKNOWN) {
                 // Default to R32 format for shader visibility
@@ -95,29 +99,21 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
         }
 
         TRACE("Creating buffer with Usage=%d, CPUAccessFlags=%d, BindFlags=%d",
-              bufferDesc.Usage, bufferDesc.CPUAccessFlags, bufferDesc.BindFlags);
+              bufferDesc.Usage, bufferDesc.CPUAccessFlags,
+              bufferDesc.BindFlags);
 
         Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-        HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(
-            &bufferDesc, nullptr, &buffer);
-        
+        HRESULT hr = m_device->GetD3D11Device()->CreateBuffer(&bufferDesc,
+                                                              nullptr, &buffer);
+
         if (FAILED(hr)) {
             ERR("Failed to create D3D11 buffer, hr %#x", hr);
             return;
         }
-        
+
         m_resource = buffer;
-        
-        // Store GPU virtual address for buffer
-        if (bufferDesc.BindFlags & (D3D11_BIND_VERTEX_BUFFER |
-                                  D3D11_BIND_INDEX_BUFFER |
-                                  D3D11_BIND_CONSTANT_BUFFER |
-                                  D3D11_BIND_SHADER_RESOURCE |
-                                  D3D11_BIND_UNORDERED_ACCESS)) {
-            m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
-        }
-    }
-    else {
+
+    } else {
         DXGI_FORMAT format = GetViewFormat(pDesc->Format);
         switch (pDesc->Dimension) {
             case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
@@ -130,7 +126,8 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                 texDesc.Usage = GetD3D11Usage(pHeapProperties);
                 texDesc.BindFlags = GetD3D11BindFlags(pDesc);
                 texDesc.CPUAccessFlags =
-                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC)
+                        ? D3D11_CPU_ACCESS_WRITE
                     : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
                         ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
                         : 0;
@@ -159,7 +156,8 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                 texDesc.Usage = GetD3D11Usage(pHeapProperties);
                 texDesc.BindFlags = GetD3D11BindFlags(pDesc);
                 texDesc.CPUAccessFlags =
-                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC)
+                        ? D3D11_CPU_ACCESS_WRITE
                     : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
                         ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
                         : 0;
@@ -187,7 +185,8 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
                 texDesc.Usage = GetD3D11Usage(pHeapProperties);
                 texDesc.BindFlags = GetD3D11BindFlags(pDesc);
                 texDesc.CPUAccessFlags =
-                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC) ? D3D11_CPU_ACCESS_WRITE
+                    (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_DYNAMIC)
+                        ? D3D11_CPU_ACCESS_WRITE
                     : (GetD3D11Usage(pHeapProperties) == D3D11_USAGE_STAGING)
                         ? (D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE)
                         : 0;
@@ -210,76 +209,81 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
         }
     }
 
-    TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
-          m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
+    TRACE(
+        "Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
+        m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
 }
 
-WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
-                            ID3D11Resource* resource,
-                            const D3D12_RESOURCE_DESC* pDesc,
-                            D3D12_RESOURCE_STATES InitialState)
-    : m_device(device)
-    , m_resource(resource)
-    , m_desc(*pDesc)
-    , m_heapProperties{}
-    , m_heapFlags(D3D12_HEAP_FLAG_NONE)
-    , m_gpuAddress(0)
-    , m_refCount(1)
-    , m_currentState(InitialState)
-    , m_state(InitialState)
-    , m_isUAV(false)
-    , m_format(pDesc->Format) {
-    
+WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
+    WrappedD3D12ToD3D11Device* device, ID3D11Resource* resource,
+    const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState)
+    : m_device(device),
+      m_resource(resource),
+      m_desc(*pDesc),
+      m_heapProperties{},
+      m_heapFlags(D3D12_HEAP_FLAG_NONE),
+      m_refCount(1),
+      m_currentState(InitialState),
+      m_state(InitialState),
+      m_isUAV(false),
+      m_format(pDesc->Format) {
     if (resource) {
-        // Check if this is a buffer that needs GPU virtual address
-        if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
-            D3D11_BUFFER_DESC bufferDesc = {};
-            Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-            if (SUCCEEDED(resource->QueryInterface(IID_PPV_ARGS(&buffer)))) {
-                buffer->GetDesc(&bufferDesc);
-                
-                // Allocate GPU virtual address if buffer can be accessed by shaders
-                if (bufferDesc.BindFlags & (D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS)) {
-                    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, static_cast<UINT64>(pDesc->Width));
-                    TRACE("Allocated GPU virtual address %llx for existing buffer", m_gpuAddress);
-                }
-            }
-        }
-        
         StoreInDeviceMap();
     }
 }
 
 WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
-    TRACE("Destroying resource this=%p, gpuAddress=%llu", this, m_gpuAddress);
+    TRACE("Destroying resource this=%p", this);
     if (m_gpuAddress) {
-        m_device->FreeGPUVirtualAddress(m_gpuAddress);
-        m_gpuAddress = 0;  // Clear it to help catch use-after-free
+        GPUVirtualAddressManager::Get().Free(m_gpuAddress);
     }
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
+    TRACE("GetGPUVirtualAddress called for resource %p", this);
+    
+    // Only allocate GPU virtual addresses for resources that can be accessed by the GPU
+    if (!m_gpuAddress) {
+        // Check if this is a buffer or texture that needs a GPU address
+        D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(&m_desc);
+        if (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
+            (bindFlags & (D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | 
+             D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | 
+             D3D11_BIND_UNORDERED_ACCESS))) {
+            m_gpuAddress = GPUVirtualAddressManager::Get().Allocate(&m_desc);
+            TRACE("Allocated GPU virtual address %p for resource %p", m_gpuAddress, this);
+        } else {
+            // Return 0 for resources that don't need GPU addresses
+            TRACE("Resource %p does not need a GPU virtual address", this);
+            return 0;
+        }
+    }
+    return m_gpuAddress;
 }
 
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
     TRACE("StoreInDeviceMap for resource %p, type: %d", this, m_desc.Dimension);
-    
+
     // Store D3D11<->D3D12 resource mapping
     Microsoft::WRL::ComPtr<ID3D11Resource> d3d11Resource;
     if (SUCCEEDED(m_resource.As(&d3d11Resource))) {
         m_device->StoreD3D11ResourceMapping(this, d3d11Resource.Get());
-        
+
         // Extra debug info for buffers
         if (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
             Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
             if (SUCCEEDED(m_resource.As(&buffer))) {
                 D3D11_BUFFER_DESC desc = {};
                 buffer->GetDesc(&desc);
-                TRACE("  Buffer info - BindFlags: %u, ByteWidth: %u, Usage: %d", 
+                TRACE("  Buffer info - BindFlags: %u, ByteWidth: %u, Usage: %d",
                       desc.BindFlags, desc.ByteWidth, desc.Usage);
             }
         }
     }
 }
 
-UINT WrappedD3D12ToD3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc) {
+UINT WrappedD3D12ToD3D11Resource::GetMiscFlags(
+    const D3D12_RESOURCE_DESC* pDesc) {
     TRACE("GetMiscFlags called");
     TRACE("  Alignment: %llu", pDesc->Alignment);
     TRACE("  Dimension: %x", pDesc->Dimension);
@@ -316,7 +320,7 @@ UINT WrappedD3D12ToD3D11Resource::GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc)
 }
 
 void WrappedD3D12ToD3D11Resource::TransitionTo(ID3D11DeviceContext* context,
-                                 D3D12_RESOURCE_STATES newState) {
+                                               D3D12_RESOURCE_STATES newState) {
     TRACE("WrappedD3D12ToD3D11Resource::TransitionTo %p, %#x -> %#x", context,
           m_currentState, newState);
 
@@ -364,9 +368,10 @@ void WrappedD3D12ToD3D11Resource::UAVBarrier(ID3D11DeviceContext* context) {
     }
 }
 
-void WrappedD3D12ToD3D11Resource::AliasingBarrier(ID3D11DeviceContext* context,
-                                    WrappedD3D12ToD3D11Resource* pResourceAfter) {
-    TRACE("WrappedD3D12ToD3D11Resource::AliasingBarrier %p, %p", context, pResourceAfter);
+void WrappedD3D12ToD3D11Resource::AliasingBarrier(
+    ID3D11DeviceContext* context, WrappedD3D12ToD3D11Resource* pResourceAfter) {
+    TRACE("WrappedD3D12ToD3D11Resource::AliasingBarrier %p, %p", context,
+          pResourceAfter);
 
     // Ensure all operations on both resources are completed
     context->Flush();
@@ -378,30 +383,36 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
     D3D11_BIND_FLAG flags = static_cast<D3D11_BIND_FLAG>(0);
 
     // For buffers, set appropriate bind flags based on size and alignment
-    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER || 
-        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && pDesc->Height == 1)) {
+    if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
+        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
+         pDesc->Height == 1)) {
         TRACE("Resource is a buffer or 1D resource with height=1");
-        
+
         // For small buffers (<4KB), could be vertex or index buffer
         if (pDesc->Width <= 4096) {
-            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER);
+            flags = static_cast<D3D11_BIND_FLAG>(
+                flags | D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER);
         }
-        
+
         // For aligned buffers, could be constant buffer regardless of size
-        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) && 
+        if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
             (pDesc->Width % 16) == 0) {
-            flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_CONSTANT_BUFFER);
+            flags = static_cast<D3D11_BIND_FLAG>(flags |
+                                                 D3D11_BIND_CONSTANT_BUFFER);
         }
     }
 
     // Add UAV flag if requested
     if (pDesc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
+        flags =
+            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_UNORDERED_ACCESS);
     }
 
-    // Add shader resource view if not denied and we don't already have constant buffer
+    // Add shader resource view if not denied and we don't already have constant
+    // buffer
     if (!(pDesc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)) {
-        flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
+        flags =
+            static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_SHADER_RESOURCE);
     }
 
     // For render targets
@@ -414,7 +425,8 @@ D3D11_BIND_FLAG WrappedD3D12ToD3D11Resource::GetD3D11BindFlags(
         flags = static_cast<D3D11_BIND_FLAG>(flags | D3D11_BIND_DEPTH_STENCIL);
     }
 
-    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x", pDesc->Flags, flags);
+    TRACE("  Resource flags: %#x -> D3D11 bind flags: %#x", pDesc->Flags,
+          flags);
     return flags;
 }
 
@@ -439,7 +451,7 @@ DXGI_FORMAT WrappedD3D12ToD3D11Resource::GetViewFormat(DXGI_FORMAT format) {
         case DXGI_FORMAT_R32G32_UINT:
         case DXGI_FORMAT_R32G32_SINT:
             return format;
-            
+
         default:
             WARN("Unsupported format %d, using original format", format);
             return format;
@@ -471,7 +483,8 @@ D3D11_USAGE WrappedD3D12ToD3D11Resource::GetD3D11Usage(
     }
 }
 
-UINT WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags(const D3D12_HEAP_PROPERTIES* pHeapProperties) {
+UINT WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags(
+    const D3D12_HEAP_PROPERTIES* pHeapProperties) {
     TRACE("WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags called");
     switch (pHeapProperties->Type) {
         case D3D12_HEAP_TYPE_DEFAULT:
@@ -496,7 +509,8 @@ UINT WrappedD3D12ToD3D11Resource::GetD3D11CPUAccessFlags(const D3D12_HEAP_PROPER
 }
 
 // IUnknown methods
-HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid, void** ppvObject) {
+HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid,
+                                                    void** ppvObject) {
     TRACE("WrappedD3D12ToD3D11Resource::QueryInterface called: %s, %p",
           debugstr_guid(&riid).c_str(), ppvObject);
 
@@ -507,7 +521,9 @@ HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid, void** ppvObjec
     *ppvObject = nullptr;
 
     if (riid == __uuidof(ID3D12Resource)) {
-        TRACE("WrappedD3D12ToD3D11Resource::QueryInterface returning ID3D12Resource");
+        TRACE(
+            "WrappedD3D12ToD3D11Resource::QueryInterface returning "
+            "ID3D12Resource");
         AddRef();
         *ppvObject = static_cast<ID3D12Resource*>(this);
         return S_OK;
@@ -523,7 +539,8 @@ HRESULT WrappedD3D12ToD3D11Resource::QueryInterface(REFIID riid, void** ppvObjec
     // Handle D3D11 resource mapping interface
     if (riid == __uuidof(ID3D11Resource)) {
         if (m_resource) {
-            m_resource->AddRef();  // AddRef on the underlying resource instead of the wrapper
+            m_resource->AddRef();  // AddRef on the underlying resource instead
+                                   // of the wrapper
             *ppvObject = m_resource.Get();
             return S_OK;
         }
@@ -550,22 +567,22 @@ ULONG WrappedD3D12ToD3D11Resource::Release() {
 
 // ID3D12Object methods
 HRESULT WrappedD3D12ToD3D11Resource::GetPrivateData(REFGUID guid,
-                                                        UINT* pDataSize,
-                                                        void* pData) {
+                                                    UINT* pDataSize,
+                                                    void* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::GetPrivateData called: %s, %p, %p",
           debugstr_guid(&guid).c_str(), pDataSize, pData);
     return m_resource->GetPrivateData(guid, pDataSize, pData);
 }
 
-HRESULT WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID guid,
-                                                        UINT DataSize,
-                                                        const void* pData) {
+HRESULT WrappedD3D12ToD3D11Resource::SetPrivateData(REFGUID guid, UINT DataSize,
+                                                    const void* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::SetPrivateData %s, %u, %p",
           debugstr_guid(&guid).c_str(), DataSize, pData);
     return m_resource->SetPrivateData(guid, DataSize, pData);
 }
 
-HRESULT WrappedD3D12ToD3D11Resource::SetPrivateDataInterface(REFGUID guid, const IUnknown* pData) {
+HRESULT WrappedD3D12ToD3D11Resource::SetPrivateDataInterface(
+    REFGUID guid, const IUnknown* pData) {
     TRACE("WrappedD3D12ToD3D11Resource::SetPrivateDataInterface %s, %p",
           debugstr_guid(&guid).c_str(), pData);
     return m_resource->SetPrivateDataInterface(guid, pData);
@@ -579,18 +596,18 @@ HRESULT WrappedD3D12ToD3D11Resource::SetName(LPCWSTR Name) {
 }
 
 // ID3D12DeviceChild methods
-HRESULT WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid,
-                                                   void** ppvDevice) {
-    TRACE("WrappedD3D12ToD3D11Resource::GetDevice %s, %p", debugstr_guid(&riid).c_str(),
-          ppvDevice);
+HRESULT WrappedD3D12ToD3D11Resource::GetDevice(REFIID riid, void** ppvDevice) {
+    TRACE("WrappedD3D12ToD3D11Resource::GetDevice %s, %p",
+          debugstr_guid(&riid).c_str(), ppvDevice);
     return m_device->QueryInterface(riid, ppvDevice);
 }
 
 // ID3D12Resource methods
 HRESULT WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
-                                             const D3D12_RANGE* pReadRange,
-                                             void** ppData) {
-    TRACE("WrappedD3D12ToD3D11Resource::Map %u, %p, %p", Subresource, pReadRange, ppData);
+                                         const D3D12_RANGE* pReadRange,
+                                         void** ppData) {
+    TRACE("WrappedD3D12ToD3D11Resource::Map %u, %p, %p", Subresource,
+          pReadRange, ppData);
 
     if (!ppData) {
         ERR("Invalid ppData parameter");
@@ -616,11 +633,10 @@ HRESULT WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
         // For textures, use the default mapping strategy
         mapType = D3D11_MAP_WRITE_DISCARD;
     }
-    
+
     TRACE("Mapping resource with type %d", mapType);
     HRESULT hr = m_device->GetD3D11Context()->Map(m_resource.Get(), Subresource,
-                                                 mapType, 0,
-                                                 &mappedResource);
+                                                  mapType, 0, &mappedResource);
     if (SUCCEEDED(hr)) {
         *ppData = mappedResource.pData;
         TRACE("Successfully mapped resource at %p", mappedResource.pData);
@@ -632,12 +648,14 @@ HRESULT WrappedD3D12ToD3D11Resource::Map(UINT Subresource,
 }
 
 void WrappedD3D12ToD3D11Resource::Unmap(UINT Subresource,
-                                            const D3D12_RANGE* pWrittenRange) {
-    TRACE("WrappedD3D12ToD3D11Resource::Unmap %u, %p", Subresource, pWrittenRange);
+                                        const D3D12_RANGE* pWrittenRange) {
+    TRACE("WrappedD3D12ToD3D11Resource::Unmap %u, %p", Subresource,
+          pWrittenRange);
     m_device->GetD3D11Context()->Unmap(m_resource.Get(), Subresource);
 }
 
-D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* pDesc) {
+D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(
+    D3D12_RESOURCE_DESC* pDesc) {
     if (pDesc) {
         TRACE("WrappedD3D12ToD3D11Resource::GetDesc(%p)", pDesc);
         TRACE("  Dimension: %d", m_desc.Dimension);
@@ -655,65 +673,14 @@ D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* p
     return pDesc;
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
-    TRACE("GetGPUVirtualAddress called for resource %p", this);
-    
-    // Only buffers should have GPU addresses
-    if (m_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
-        ERR("GetGPUVirtualAddress called on non-buffer resource type %d", m_desc.Dimension);
-        return 0;
-    }
-
-    // Return existing GPU address if already allocated
-    if (m_gpuAddress) {
-        TRACE("Returning existing GPU address %llu for resource %p", m_gpuAddress, this);
-        return m_gpuAddress;
-    }
-
-    // Get buffer description
-    D3D11_BUFFER_DESC bufferDesc = {};
-    Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-    
-    if (!m_resource) {
-        ERR("No D3D11 resource available for %p", this);
-        return 0;
-    }
-    
-    if (FAILED(m_resource.As(&buffer))) {
-        ERR("Failed to get ID3D11Buffer from resource %p", this);
-        return 0;
-    }
-
-    buffer->GetDesc(&bufferDesc);
-    TRACE("Getting GPU address for buffer - BindFlags: %#x, ByteWidth: %u, Usage: %d", 
-          bufferDesc.BindFlags, bufferDesc.ByteWidth, bufferDesc.Usage);
-              
-    // Only allocate GPU address for shader-visible resources
-    if (!(bufferDesc.BindFlags & (D3D11_BIND_VERTEX_BUFFER |
-                                D3D11_BIND_INDEX_BUFFER |
-                                D3D11_BIND_CONSTANT_BUFFER |
-                                D3D11_BIND_SHADER_RESOURCE |
-                                D3D11_BIND_UNORDERED_ACCESS))) {
-        TRACE("Buffer %p does not need GPU address - bind flags %#x", this, bufferDesc.BindFlags);
-        return 0;
-    }
-    
-    m_gpuAddress = m_device->AllocateGPUVirtualAddress(this, bufferDesc.ByteWidth);
-    
-    if (!m_gpuAddress) {
-        ERR("Failed to allocate GPU address for buffer resource %p", this);
-        return 0;
-    }
-    
-    TRACE("Allocated GPU address %llu for buffer resource %p", m_gpuAddress, this);
-    return m_gpuAddress;
-}
 
 HRESULT WrappedD3D12ToD3D11Resource::WriteToSubresource(
     UINT DstSubresource, const D3D12_BOX* pDstBox, const void* pSrcData,
     UINT SrcRowPitch, UINT SrcDepthPitch) {
-    TRACE("WrappedD3D12ToD3D11Resource::WriteToSubresource called %u, %p, %p, %u, %u",
-          DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch);
+    TRACE(
+        "WrappedD3D12ToD3D11Resource::WriteToSubresource called %u, %p, %p, "
+        "%u, %u",
+        DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch);
 
     m_device->GetD3D11Context()->UpdateSubresource(
         m_resource.Get(), DstSubresource,
@@ -726,8 +693,8 @@ HRESULT WrappedD3D12ToD3D11Resource::WriteToSubresource(
 HRESULT WrappedD3D12ToD3D11Resource::ReadFromSubresource(
     void* pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource,
     const D3D12_BOX* pSrcBox) {
-    TRACE("WrappedD3D12ToD3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p", pDstData,
-          DstRowPitch, DstDepthPitch, SrcSubresource, pSrcBox);
+    TRACE("WrappedD3D12ToD3D11Resource::ReadFromSubresource %p, %u, %u, %u, %p",
+          pDstData, DstRowPitch, DstDepthPitch, SrcSubresource, pSrcBox);
 
     // D3D11 doesn't have a direct equivalent for reading from a subresource
     // We need to create a staging resource and copy the data
@@ -737,8 +704,8 @@ HRESULT WrappedD3D12ToD3D11Resource::ReadFromSubresource(
 
 HRESULT WrappedD3D12ToD3D11Resource::GetHeapProperties(
     D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS* pHeapFlags) {
-    TRACE("WrappedD3D12ToD3D11Resource::GetHeapProperties %p, %p", pHeapProperties,
-          pHeapFlags);
+    TRACE("WrappedD3D12ToD3D11Resource::GetHeapProperties %p, %p",
+          pHeapProperties, pHeapFlags);
 
     if (pHeapProperties) {
         *pHeapProperties = m_heapProperties;
