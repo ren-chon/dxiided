@@ -70,6 +70,13 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
       m_isUAV(false),
       m_format(pDesc->Format) {
     
+    // Allocate GPU VA first before creating the resource
+    // This ensures addresses are allocated in creation order
+    m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
+        nullptr,  // Resource not created yet
+        pDesc->Dimension,
+        pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
+    
     // If it looks like a buffer (1D with height=1), treat it as one
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
         (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
@@ -206,10 +213,10 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
     // Allocate GPU virtual address after resource creation
     if (m_resource) {
         TRACE("Allocating GPU virtual address for new resource %p", m_resource.Get());
-        m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
-            m_resource.Get(),
-            pDesc->Dimension,
-            pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
+        if (m_gpuVirtualAddress == 0) {
+            ERR("GPU Virtual Address not allocated during resource creation!");
+            return;
+        }
         TRACE("  Allocated GPU virtual address %llu", m_gpuVirtualAddress);
     }
 }
@@ -229,19 +236,18 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
     , m_isUAV(false)
     , m_format(pDesc->Format) {
     
-    if (resource) {
-        StoreInDeviceMap();
+    // Allocate GPU VA immediately for wrapped resources
+    m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
+        resource,
+        pDesc->Dimension,
+        pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
+    
+    if (m_gpuVirtualAddress == 0) {
+        ERR("GPU Virtual Address not allocated during resource creation!");
+        return;
     }
-
-    // Allocate GPU virtual address for existing resource
-    if (m_resource) {
-        TRACE("Allocating GPU virtual address for existing resource %p", m_resource.Get());
-        m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
-            m_resource.Get(),
-            pDesc->Dimension,
-            pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
-        TRACE("  Allocated GPU virtual address %llu", m_gpuVirtualAddress);
-    }
+    
+    StoreInDeviceMap();
 }
 
 WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
@@ -654,12 +660,8 @@ D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(D3D12_RESOURCE_DESC* p
 D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     TRACE("GetGPUVirtualAddress called for resource %p", this);
     if (m_gpuVirtualAddress == 0) {
-        TRACE("Allocating GPU virtual address");
-        // If address not allocated yet, allocate it now
-        m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
-            m_resource.Get(),
-            m_desc.Dimension,
-            m_desc.Width * m_desc.Height * m_desc.DepthOrArraySize);
+        ERR("GPU Virtual Address not allocated during resource creation!");
+        return 0;
     }
     TRACE("  Returning GPU virtual address %llu", m_gpuVirtualAddress);
     return m_gpuVirtualAddress;

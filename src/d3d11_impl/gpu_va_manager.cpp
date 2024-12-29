@@ -19,31 +19,31 @@ uint32_t GPUVAManager::GetTypeIndex(D3D12_RESOURCE_DIMENSION dimension) const {
         case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
             return 4;
         default:
-            return 0;  // Unknown/Default
+            return 0;
     }
 }
 
-uint64_t GPUVAManager::AlignSize(uint64_t size) const {
-    // Align to SIMD boundary for vector operations
-    return (size + SIMD_ALIGNMENT - 1) & ~(SIMD_ALIGNMENT - 1);
+uint64_t GPUVAManager::AlignSize(uint64_t size, D3D12_RESOURCE_DIMENSION dimension) const {
+    // Use consistent 64KB alignment for everything
+    uint64_t alignment = MINIMUM_ALIGNMENT;  // 64KB
+    
+    // Round up to the next multiple of alignment
+    return (size + alignment - 1) & ~(alignment - 1);
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::GenerateAddress(uint32_t typeIndex, uint64_t size) {
-    // Get unique offset for this resource type
-    uint64_t uniqueOffset = m_typeCounters[typeIndex].fetch_add(1);
+    // Get base offset for this type
+    D3D12_GPU_VIRTUAL_ADDRESS baseOffset = TYPE_OFFSETS[typeIndex];
     
-    // Calculate aligned size for proper resource spacing
-    uint64_t alignedSize = AlignSize(size);
+    // Calculate spacing based on aligned size
+    uint64_t alignedSize = AlignSize(size, D3D12_RESOURCE_DIMENSION_BUFFER);
     
-    // Generate final address: BASE + TYPE_OFFSET + (UNIQUE_INDEX * ALIGNED_SIZE)
-    D3D12_GPU_VIRTUAL_ADDRESS address = BASE_ADDRESS + 
-                                      TYPE_OFFSETS[typeIndex] + 
-                                      (uniqueOffset * alignedSize);
+    // Get next counter value - ensure ascending order
+    uint64_t index = m_typeCounters[typeIndex].fetch_add(1);
     
-    TRACE("Generated virtual address %p for type %u with size %llu", 
-          (void*)address, typeIndex, size);
-    
-    return address;
+    // Always generate addresses in ascending order within each type block
+    // Use index * alignedSize to ensure proper spacing based on resource size
+    return baseOffset + (index * alignedSize);
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::AllocateVirtualAddress(
@@ -51,34 +51,36 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::AllocateVirtualAddress(
     D3D12_RESOURCE_DIMENSION dimension,
     uint64_t size) {
     
-    if (!resource) {
-        ERR("Attempting to allocate virtual address for null resource");
-        return 0;
-    }
-
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Check if resource already has an address
-    auto it = m_resourceMap.find(resource);
-    if (it != m_resourceMap.end()) {
-        WARN("Resource %p already has virtual address %p", 
-             resource, (void*)it->second.address);
-        return it->second.address;
+    // If resource is provided, check if it already has an address
+    if (resource) {
+        auto it = m_resourceMap.find(resource);
+        if (it != m_resourceMap.end()) {
+            WARN("Resource %p already has virtual address %p", 
+                 resource, (void*)it->second.address);
+            return it->second.address;
+        }
     }
 
     // Generate new address
     uint32_t typeIndex = GetTypeIndex(dimension);
-    D3D12_GPU_VIRTUAL_ADDRESS address = GenerateAddress(typeIndex, size);
+    uint64_t alignedSize = AlignSize(size, dimension);
+    D3D12_GPU_VIRTUAL_ADDRESS address = GenerateAddress(typeIndex, alignedSize);
 
-    // Store resource information
-    ResourceInfo info = {
-        .address = address,
-        .size = size,
-        .dimension = dimension
-    };
-    m_resourceMap[resource] = info;
+    // Only store in map if resource is provided
+    if (resource) {
+        ResourceInfo info = {
+            .address = address,
+            .size = alignedSize,
+            .dimension = dimension
+        };
+        m_resourceMap[resource] = info;
+        TRACE("Allocated virtual address %p for resource %p", (void*)address, resource);
+    } else {
+        TRACE("Pre-allocated virtual address %p for future resource", (void*)address);
+    }
 
-    TRACE("Allocated virtual address %p for resource %p", (void*)address, resource);
     return address;
 }
 
@@ -114,7 +116,6 @@ bool GPUVAManager::IsValidAddress(D3D12_GPU_VIRTUAL_ADDRESS address) const {
 
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    // Check if address belongs to any known resource
     for (const auto& [resource, info] : m_resourceMap) {
         if (info.address == address) return true;
     }
