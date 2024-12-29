@@ -8,10 +8,12 @@
 #include <vector>
 
 #include "common/debug.hpp"
+#include "d3d11_impl/gpu_va_manager.hpp"
 
 namespace dxiided {
 
 class WrappedD3D12ToD3D11Device;
+class GPUVAManager;
 
 class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
    public:
@@ -109,12 +111,12 @@ class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
     D3D12_RESOURCE_DESC m_desc;
     D3D12_HEAP_PROPERTIES m_heapProperties;
     D3D12_HEAP_FLAGS m_heapFlags;
-    D3D12_GPU_VIRTUAL_ADDRESS m_gpuAddress{0};
     LONG m_refCount{1};
     D3D12_RESOURCE_STATES m_currentState{D3D12_RESOURCE_STATE_COMMON};
-    D3D12_RESOURCE_STATES m_state;  // Add state member
+    D3D12_RESOURCE_STATES m_state;
     bool m_isUAV{false};
-    DXGI_FORMAT m_format{DXGI_FORMAT_UNKNOWN};  // Add format member
+    DXGI_FORMAT m_format{DXGI_FORMAT_UNKNOWN};
+    D3D12_GPU_VIRTUAL_ADDRESS m_gpuVirtualAddress{0};
 };
 
 }  // namespace dxiided

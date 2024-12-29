@@ -1154,54 +1154,6 @@ ID3D12Resource* WrappedD3D12ToD3D11Device::GetD3D12Resource(ID3D11Resource* d3d1
     return (it != m_d3d11ToD3d12Resources.end()) ? it->second : nullptr;
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Device::AllocateGPUVirtualAddress(void* resource, UINT64 size) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    // Start from a lower address for older iGPUs
-    if (m_nextGPUAddress == 0) {
-        // Start at 1MB mark instead of 4GB for better compatibility
-        m_nextGPUAddress = 0x100000ULL;  // 1MB mark
-    }
-
-    // Ensure minimum alignment of 256 bytes as required by D3D12
-    size = (size + 255) & ~255;
-    
-    // Check for address space overflow
-    if (m_nextGPUAddress + size < m_nextGPUAddress) {
-        ERR("GPU virtual address space overflow");
-        return 0;
-    }
-
-    D3D12_GPU_VIRTUAL_ADDRESS address = m_nextGPUAddress;
-    m_gpuAddressMap[address] = std::make_pair(resource, size);
-    
-    m_nextGPUAddress += size;
-    
-    TRACE("Allocated GPU virtual address %llx for resource %p with size %llu", address, resource, size);
-    return address;
-}
-
-void WrappedD3D12ToD3D11Device::FreeGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    auto it = m_gpuAddressMap.find(address);
-    if (it != m_gpuAddressMap.end()) {
-        TRACE("Freed GPU virtual address %llx for resource %p", address, it->second.first);
-        m_gpuAddressMap.erase(it);
-    }
-}
-
-void* WrappedD3D12ToD3D11Device::GetResourceFromGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
-    std::lock_guard<std::mutex> lock(m_gpuAddressMutex);
-    
-    auto it = m_gpuAddressMap.find(address);
-    if (it != m_gpuAddressMap.end()) {
-        return it->second.first;
-    }
-    
-    WARN("No resource found for GPU virtual address %llx", address);
-    return nullptr;
-}
 
 void STDMETHODCALLTYPE WrappedD3D12ToD3D11Device::GetCopyableFootprints(
     const D3D12_RESOURCE_DESC* pResourceDesc, UINT FirstSubresource,

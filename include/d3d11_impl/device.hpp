@@ -318,10 +318,6 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     ID3D12Resource* GetD3D12Resource(ID3D11Resource* d3d11Resource);
     void StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource);
 
-    // GPU Virtual Address Management
-    D3D12_GPU_VIRTUAL_ADDRESS AllocateGPUVirtualAddress(void* resource, UINT64 size);
-    void FreeGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address);
-    void* GetResourceFromGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address);
    private:
     WrappedD3D12ToD3D11Device(Microsoft::WRL::ComPtr<ID3D11Device> device,
                 Microsoft::WRL::ComPtr<ID3D11DeviceContext> context,
@@ -344,12 +340,6 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     std::mutex m_resourceMappingMutex;
     std::unordered_map<ID3D12Resource*, ID3D11Resource*> m_d3d12ToD3d11Resources;
     std::unordered_map<ID3D11Resource*, ID3D12Resource*> m_d3d11ToD3d12Resources;
-
-    // GPU Virtual Address Management
-    std::mutex m_gpuAddressMutex;
-    D3D12_GPU_VIRTUAL_ADDRESS m_nextGPUAddress = 0; // Will be initialized to 1MB in AllocateGPUVirtualAddress
-    std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, std::pair<void*, UINT64>> m_gpuAddressMap;
-
 };
 
 }  // namespace dxiided

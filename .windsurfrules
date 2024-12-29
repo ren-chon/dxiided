@@ -1,3 +1,4 @@
+- source files are in src/ directory and headers are in include/ directory
 - we're working on a d3d12 to d3d11 downgrade layer not the opposite
 - when you propose changes to one file, do not split edits in chunks
 ## Goal
@@ -19,3 +20,4 @@ we are createing a downgrade layer that allows DirectX 12 games and applications
 - always analyze files before committing any changes
 - always analyze file mentioned in the logs stack one by one to fix potential issues
 - ask for game disassembly pesudo ghidra code analysis or assembly to understand how the target application or game is behaving
+
