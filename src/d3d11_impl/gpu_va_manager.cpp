@@ -8,42 +8,71 @@ GPUVAManager& GPUVAManager::Get() {
     return instance;
 }
 
-uint32_t GPUVAManager::GetTypeIndex(D3D12_RESOURCE_DIMENSION dimension) const {
-    switch (dimension) {
-        case D3D12_RESOURCE_DIMENSION_BUFFER:
-            return 1;
-        case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-            return 2;
-        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-            return 3;
-        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-            return 4;
-        default:
-            return 0;
-    }
+GPUVAManager::GPUVAManager() {
+    // Initialize with empty used regions
+    m_usedRegions.clear();
 }
 
-uint64_t GPUVAManager::AlignSize(uint64_t size, D3D12_RESOURCE_DIMENSION dimension) const {
-    // Use consistent 64KB alignment for everything
-    uint64_t alignment = MINIMUM_ALIGNMENT;  // 64KB
+uint64_t GPUVAManager::AlignSize(uint64_t size, D3D12_RESOURCE_DIMENSION dimension) {
+    uint64_t alignment;
     
-    // Round up to the next multiple of alignment
+    switch (dimension) {
+        case D3D12_RESOURCE_DIMENSION_BUFFER:
+            // D3D12 buffer alignment rules
+            if (size <= 4096) {
+                alignment = 256;  // Small buffers
+            } else if (size <= 64 * 1024) {
+                alignment = 4096;  // Medium buffers
+            } else {
+                alignment = 64 * 1024;  // Large buffers
+            }
+            break;
+            
+        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+            alignment = 64 * 1024;  // Textures always 64KB aligned
+            break;
+            
+        default:
+            alignment = 4096;  // Default page size alignment
+            break;
+    }
+    
     return (size + alignment - 1) & ~(alignment - 1);
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::GenerateAddress(uint32_t typeIndex, uint64_t size) {
-    // Get base offset for this type
-    D3D12_GPU_VIRTUAL_ADDRESS baseOffset = TYPE_OFFSETS[typeIndex];
+D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::FindFreeRegion(uint64_t size, D3D12_RESOURCE_DIMENSION dimension) {
+    D3D12_GPU_VIRTUAL_ADDRESS start = (dimension == D3D12_RESOURCE_DIMENSION_BUFFER) ? BUFFER_START : TEXTURE_START;
+    D3D12_GPU_VIRTUAL_ADDRESS current = start;
     
-    // Calculate spacing based on aligned size
-    uint64_t alignedSize = AlignSize(size, D3D12_RESOURCE_DIMENSION_BUFFER);
+    for (const auto& region : m_usedRegions) {
+        if (current + size <= region.start) {
+            // Found a gap big enough
+            return current;
+        }
+        current = region.end;
+    }
     
-    // Get next counter value - ensure ascending order
-    uint64_t index = m_typeCounters[typeIndex].fetch_add(1);
+    // No gaps found, append to end
+    if (current + size <= MAX_ADDRESS) {
+        return current;
+    }
     
-    // Always generate addresses in ascending order within each type block
-    // Use index * alignedSize to ensure proper spacing based on resource size
-    return baseOffset + (index * alignedSize);
+    ERR("Failed to find free GPU VA region of size %llu", size);
+    return 0;
+}
+
+void GPUVAManager::AddUsedRegion(D3D12_GPU_VIRTUAL_ADDRESS start, uint64_t size) {
+    GPUVARegion region{start, start + size};
+    m_usedRegions.insert(region);
+}
+
+void GPUVAManager::RemoveUsedRegion(D3D12_GPU_VIRTUAL_ADDRESS address) {
+    for (auto it = m_usedRegions.begin(); it != m_usedRegions.end(); ++it) {
+        if (it->start == address) {
+            m_usedRegions.erase(it);
+            return;
+        }
+    }
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::AllocateVirtualAddress(
@@ -52,75 +81,61 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::AllocateVirtualAddress(
     uint64_t size) {
     
     std::lock_guard<std::mutex> lock(m_mutex);
-
-    // If resource is provided, check if it already has an address
-    if (resource) {
-        auto it = m_resourceMap.find(resource);
-        if (it != m_resourceMap.end()) {
-            WARN("Resource %p already has virtual address %p", 
-                 resource, (void*)it->second.address);
-            return it->second.address;
-        }
+    
+    // Validate input parameters
+    if (size == 0) {
+        ERR("Cannot allocate VA of size 0");
+        return 0;
     }
 
-    // Generate new address
-    uint32_t typeIndex = GetTypeIndex(dimension);
+    // Check if resource already has VA allocated
+    if (resource && m_resourceRegions.find(resource) != m_resourceRegions.end()) {
+        ERR("Resource %p already has VA allocated", resource);
+        return 0;
+    }
+
+    // Align the size according to D3D12 rules
     uint64_t alignedSize = AlignSize(size, dimension);
-    D3D12_GPU_VIRTUAL_ADDRESS address = GenerateAddress(typeIndex, alignedSize);
-
-    // Only store in map if resource is provided
-    if (resource) {
-        ResourceInfo info = {
-            .address = address,
-            .size = alignedSize,
-            .dimension = dimension
-        };
-        m_resourceMap[resource] = info;
-        TRACE("Allocated virtual address %p for resource %p", (void*)address, resource);
-    } else {
-        TRACE("Pre-allocated virtual address %p for future resource", (void*)address);
+    
+    // Find a free region for this allocation
+    D3D12_GPU_VIRTUAL_ADDRESS address = FindFreeRegion(alignedSize, dimension);
+    if (address == 0) {
+        return 0;
     }
-
+    
+    // Mark region as used
+    AddUsedRegion(address, alignedSize);
+    
+    // Store mapping if resource provided
+    if (resource) {
+        m_resourceRegions[resource] = GPUVARegion{address, address + alignedSize};
+        TRACE("Allocated virtual address %p (size %llu) for resource %p", 
+              (void*)address, alignedSize, resource);
+    } else {
+        TRACE("Pre-allocated virtual address %p (size %llu) for future resource", 
+              (void*)address, alignedSize);
+    }
+    
     return address;
 }
 
 void GPUVAManager::FreeVirtualAddress(ID3D11Resource* resource) {
-    if (!resource) return;
-
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    auto it = m_resourceMap.find(resource);
-    if (it != m_resourceMap.end()) {
+    if (!resource) {
+        ERR("Cannot free VA for null resource");
+        return;
+    }
+    
+    auto it = m_resourceRegions.find(resource);
+    if (it != m_resourceRegions.end()) {
+        RemoveUsedRegion(it->second.start);
         TRACE("Freed virtual address %p for resource %p", 
-              (void*)it->second.address, resource);
-        m_resourceMap.erase(it);
+              (void*)it->second.start, resource);
+        m_resourceRegions.erase(it);
+    } else {
+        WARN("No VA found for resource %p during free", resource);
     }
-}
-
-D3D12_GPU_VIRTUAL_ADDRESS GPUVAManager::GetVirtualAddress(ID3D11Resource* resource) const {
-    if (!resource) return 0;
-
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
-    auto it = m_resourceMap.find(resource);
-    if (it != m_resourceMap.end()) {
-        return it->second.address;
-    }
-
-    WARN("No virtual address found for resource %p", resource);
-    return 0;
-}
-
-bool GPUVAManager::IsValidAddress(D3D12_GPU_VIRTUAL_ADDRESS address) const {
-    if (address < BASE_ADDRESS) return false;
-
-    std::lock_guard<std::mutex> lock(m_mutex);
-    
-    for (const auto& [resource, info] : m_resourceMap) {
-        if (info.address == address) return true;
-    }
-
-    return false;
 }
 
 }  // namespace dxiided

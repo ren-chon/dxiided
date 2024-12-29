@@ -82,6 +82,7 @@ class WrappedD3D12ToD3D11Resource final : public ID3D12Resource {
     ID3D11Resource* GetD3D11Resource() const { return m_resource.Get(); }
     static UINT GetMiscFlags(const D3D12_RESOURCE_DESC* pDesc);
     void StoreInDeviceMap();
+    uint32_t GetFormatSize(DXGI_FORMAT format) ;
     
     // Format handling methods
     DXGI_FORMAT GetFormat() const { return m_format; }

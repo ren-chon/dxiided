@@ -70,17 +70,9 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
       m_isUAV(false),
       m_format(pDesc->Format) {
     
-    // Allocate GPU VA first before creating the resource
-    // This ensures addresses are allocated in creation order
-    m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
-        nullptr,  // Resource not created yet
-        pDesc->Dimension,
-        pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
-    
-    // If it looks like a buffer (1D with height=1), treat it as one
+    // Create D3D11 resource first
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
-        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
-         pDesc->Height == 1)) {
+        (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D && pDesc->Height == 1)) {
         
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.ByteWidth = static_cast<UINT>(pDesc->Width);
@@ -113,6 +105,19 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
         }
         
         m_resource = buffer;
+
+        // Only allocate GPU VA after successful resource creation
+        m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
+            m_resource.Get(),  // Now pass the created resource
+            pDesc->Dimension,
+            pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
+
+        if (m_gpuVirtualAddress == 0) {
+            ERR("Failed to allocate GPU virtual address for resource");
+            m_resource->Release();
+            m_resource = nullptr;
+            return;
+        }
     }
     else {
         DXGI_FORMAT format = GetViewFormat(pDesc->Format);
@@ -209,16 +214,6 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
 
     TRACE("Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
           m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
-
-    // Allocate GPU virtual address after resource creation
-    if (m_resource) {
-        TRACE("Allocating GPU virtual address for new resource %p", m_resource.Get());
-        if (m_gpuVirtualAddress == 0) {
-            ERR("GPU Virtual Address not allocated during resource creation!");
-            return;
-        }
-        TRACE("  Allocated GPU virtual address %llu", m_gpuVirtualAddress);
-    }
 }
 
 WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Device* device,
@@ -237,10 +232,17 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(WrappedD3D12ToD3D11Devi
     , m_format(pDesc->Format) {
     
     // Allocate GPU VA immediately for wrapped resources
+    uint64_t resourceSize = pDesc->Width;
+    if (pDesc->Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
+        // For textures, account for height, depth and format size
+        uint32_t formatSize = GetFormatSize(pDesc->Format);
+        resourceSize *= pDesc->Height * pDesc->DepthOrArraySize * formatSize;
+    }
+    
     m_gpuVirtualAddress = GPUVAManager::Get().AllocateVirtualAddress(
         resource,
         pDesc->Dimension,
-        pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize);
+        resourceSize);
     
     if (m_gpuVirtualAddress == 0) {
         ERR("GPU Virtual Address not allocated during resource creation!");
@@ -254,9 +256,12 @@ WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
     TRACE("Destroying resource");
     // Free GPU virtual address
     if (m_gpuVirtualAddress != 0) {
-        TRACE("Freeing GPU virtual address %p for resource %p", 
-              (void*)m_gpuVirtualAddress, m_resource.Get());
         GPUVAManager::Get().FreeVirtualAddress(m_resource.Get());
+        m_gpuVirtualAddress = 0;
+    }
+    if (m_resource) {
+        m_resource->Release();
+        m_resource = nullptr;
     }
 }
 
@@ -706,6 +711,37 @@ HRESULT WrappedD3D12ToD3D11Resource::GetHeapProperties(
     }
 
     return S_OK;
+}
+
+uint32_t WrappedD3D12ToD3D11Resource::GetFormatSize(DXGI_FORMAT format) {
+    switch (format) {
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+            return 4;
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+        case DXGI_FORMAT_R16G16B16A16_SNORM:
+            return 8;
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+            return 4;
+        case DXGI_FORMAT_R8G8B8A8_SNORM:
+            return 4;
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+            return 8;
+        case DXGI_FORMAT_R32G32B32A32_FLOAT:
+            return 16;
+        case DXGI_FORMAT_R32_FLOAT:
+            return 4;
+        case DXGI_FORMAT_R16G16B16A16_SINT:
+            return 8;
+        case DXGI_FORMAT_R32G32_FLOAT:
+            return 8;
+        case DXGI_FORMAT_R32G32_UINT:
+            return 8;
+        case DXGI_FORMAT_R32G32_SINT:
+            return 8;
+        default:
+            return 1;
+    }
 }
 
 }  // namespace dxiided

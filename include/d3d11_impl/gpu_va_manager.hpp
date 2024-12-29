@@ -1,69 +1,66 @@
-// gpu_va_manager.hpp
 #pragma once
 
+#include <atomic>
 #include <d3d11.h>
 #include <d3d12.h>
-#include <atomic>
+#include <map>
+#include <set>
 #include <mutex>
-#include <unordered_map>
-
-#include "common/debug.hpp"
 
 namespace dxiided {
+
+struct GPUVARegion {
+    D3D12_GPU_VIRTUAL_ADDRESS start;
+    D3D12_GPU_VIRTUAL_ADDRESS end;
+    bool operator<(const GPUVARegion& other) const { return start < other.start; }
+};
 
 class GPUVAManager {
 public:
     static GPUVAManager& Get();
 
+    /**
+     * Allocates a GPU virtual address for a D3D11 resource
+     * @param resource The D3D11 resource to allocate VA for, or nullptr for pre-allocation
+     * @param dimension Resource dimension (buffer or texture)
+     * @param size Size of the resource in bytes
+     * @return Allocated GPU virtual address, or 0 on failure
+     * @note If resource is provided, it must not already have a VA allocated
+     * @note Size must be non-zero
+     */
     D3D12_GPU_VIRTUAL_ADDRESS AllocateVirtualAddress(
         ID3D11Resource* resource,
         D3D12_RESOURCE_DIMENSION dimension,
         uint64_t size);
 
+    /**
+     * Frees a previously allocated GPU virtual address
+     * @param resource The D3D11 resource whose VA should be freed
+     * @note Resource must not be null
+     * @note It is safe to call this multiple times on the same resource
+     */
     void FreeVirtualAddress(ID3D11Resource* resource);
-    D3D12_GPU_VIRTUAL_ADDRESS GetVirtualAddress(ID3D11Resource* resource) const;
-    bool IsValidAddress(D3D12_GPU_VIRTUAL_ADDRESS address) const;
 
 private:
-    GPUVAManager() = default;
+    GPUVAManager();
     ~GPUVAManager() = default;
+
     GPUVAManager(const GPUVAManager&) = delete;
     GPUVAManager& operator=(const GPUVAManager&) = delete;
 
-    // Base address and alignment constants
-    static constexpr D3D12_GPU_VIRTUAL_ADDRESS BASE_ADDRESS = 0x100000000;  // 4GB
-    static constexpr uint32_t MAX_RESOURCE_TYPES = 6;
-    
-    // Keep resources of same type together, use ascending addresses
-    static constexpr uint64_t TYPE_BLOCK_SIZE = 0x40000000;  // 1GB per type
-    static constexpr uint64_t TYPE_OFFSETS[MAX_RESOURCE_TYPES] = {
-        BASE_ADDRESS + (0 * TYPE_BLOCK_SIZE),  // Default/Unknown
-        BASE_ADDRESS + (1 * TYPE_BLOCK_SIZE),  // Buffer
-        BASE_ADDRESS + (2 * TYPE_BLOCK_SIZE),  // Texture1D
-        BASE_ADDRESS + (3 * TYPE_BLOCK_SIZE),  // Texture2D
-        BASE_ADDRESS + (4 * TYPE_BLOCK_SIZE),  // Texture3D
-        BASE_ADDRESS + (5 * TYPE_BLOCK_SIZE)   // Reserved
-    };
+    uint64_t AlignSize(uint64_t size, D3D12_RESOURCE_DIMENSION dimension);
+    D3D12_GPU_VIRTUAL_ADDRESS FindFreeRegion(uint64_t size, D3D12_RESOURCE_DIMENSION dimension);
+    void AddUsedRegion(D3D12_GPU_VIRTUAL_ADDRESS start, uint64_t size);
+    void RemoveUsedRegion(D3D12_GPU_VIRTUAL_ADDRESS address);
 
-    // Alignment requirements - keep consistent
-    static constexpr uint64_t MINIMUM_ALIGNMENT = 65536;      // 64KB minimum
-    static constexpr uint64_t BUFFER_ALIGNMENT = 65536;       // 64KB for buffers
-    static constexpr uint64_t TEXTURE_ALIGNMENT = 65536;      // 64KB for textures
-    static constexpr uint64_t LARGE_BUFFER_THRESHOLD = 65536; // 64KB threshold
+    // Memory regions
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS BUFFER_START = 0x0000000100000000ULL;  // 4GB
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS TEXTURE_START = 0x0000001000000000ULL; // 64GB
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS MAX_ADDRESS = 0x0000004000000000ULL;   // 256GB
 
-    struct ResourceInfo {
-        D3D12_GPU_VIRTUAL_ADDRESS address;
-        uint64_t size;
-        D3D12_RESOURCE_DIMENSION dimension;
-    };
-
-    std::atomic<uint64_t> m_typeCounters[MAX_RESOURCE_TYPES];
-    std::unordered_map<ID3D11Resource*, ResourceInfo> m_resourceMap;
     mutable std::mutex m_mutex;
-
-    uint32_t GetTypeIndex(D3D12_RESOURCE_DIMENSION dimension) const;
-    uint64_t AlignSize(uint64_t size, D3D12_RESOURCE_DIMENSION dimension) const;
-    D3D12_GPU_VIRTUAL_ADDRESS GenerateAddress(uint32_t typeIndex, uint64_t size);
+    std::map<ID3D11Resource*, GPUVARegion> m_resourceRegions;
+    std::set<GPUVARegion> m_usedRegions;
 };
 
 }  // namespace dxiided
