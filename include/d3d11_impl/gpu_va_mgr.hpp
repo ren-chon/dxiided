@@ -3,7 +3,7 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <wrl/client.h>
-
+#include <unordered_set>
 #include <list>
 #include <map>
 #include <mutex>
@@ -57,8 +57,21 @@ class GPUVirtualAddressManager {
     bool IsSafeTruncatedAddress(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size);
     // Debug helpers
     void DumpAddressMap();
-
+// Helper to check if lower 32 bits are available
+    bool IsLower32BitsAvailable(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size) {
+        uint32_t truncStart = static_cast<uint32_t>(addr & 0xFFFFFFFFull);
+        uint32_t truncEnd = static_cast<uint32_t>((addr + size - 1) & 0xFFFFFFFFull);
+        
+        for (uint32_t curr = truncStart; curr <= truncEnd; curr += 0x1000) {
+            if (m_usedLower32Bits.count(curr & ~0xFFFu)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
    private:
+   std::unordered_set<uint32_t> m_usedLower32Bits;
     // Private constructor for singleton
     GPUVirtualAddressManager();
     ~GPUVirtualAddressManager();
@@ -101,5 +114,7 @@ class GPUVirtualAddressManager {
 
     // Base address for allocations
     static constexpr D3D12_GPU_VIRTUAL_ADDRESS BASE_ADDRESS = 0x100000000ull;
+
+    
 };
 }  // namespace dxiided
