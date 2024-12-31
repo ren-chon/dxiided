@@ -50,6 +50,11 @@ class GPUVirtualAddressManager {
 
     bool ValidateAddress(D3D12_GPU_VIRTUAL_ADDRESS address);
 
+    // Find full GPU virtual address given truncated 32-bit version
+    bool FindAddressByLowerBits(D3D12_GPU_VIRTUAL_ADDRESS truncated,
+                               D3D12_GPU_VIRTUAL_ADDRESS& outFullAddress);
+    
+    bool IsSafeTruncatedAddress(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size);
     // Debug helpers
     void DumpAddressMap();
 

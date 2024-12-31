@@ -176,9 +176,28 @@ UINT64 GPUVirtualAddressManager::GetRequiredAlignment(
     return DEFAULT_RESOURCE_ALIGNMENT;
 }
 
+bool GPUVirtualAddressManager::IsSafeTruncatedAddress(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size) {
+    // Get the lower 32 bits of the address range
+    D3D12_GPU_VIRTUAL_ADDRESS truncStart = addr & 0xFFFFFFFFull;
+    D3D12_GPU_VIRTUAL_ADDRESS truncEnd = (addr + size - 1) & 0xFFFFFFFFull;
+    
+    // Check if any existing allocation would overlap with these truncated addresses
+    for (const auto& range : m_addressRanges) {
+        D3D12_GPU_VIRTUAL_ADDRESS existingTruncStart = range.Start & 0xFFFFFFFFull;
+        D3D12_GPU_VIRTUAL_ADDRESS existingTruncEnd = (range.Start + range.Size - 1) & 0xFFFFFFFFull;
+        
+        // Check for overlap in truncated space
+        if (!(truncEnd < existingTruncStart || truncStart > existingTruncEnd)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateAlignedAddress(
     SIZE_T size, UINT64 alignment) {
     
+    // First try: find an address that's safe when truncated
     for (auto it = m_addressRanges.begin(); it != m_addressRanges.end(); ++it) {
         if (!it->IsFree) {
             continue;
@@ -194,6 +213,11 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateAlignedAddress(
 
         SIZE_T remainingSize = it->End - alignedStart;
         if (remainingSize < size) {
+            continue;
+        }
+
+        // Check if this address would be safe when truncated
+        if (!IsSafeTruncatedAddress(alignedStart, size)) {
             continue;
         }
 
@@ -223,6 +247,55 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateAlignedAddress(
             it->End = alignedStart + size;
         }
 
+        return alignedStart;
+    }
+
+    // Second try: find any free address if we couldn't find a safe truncated one
+    // This is needed because some games may work fine with truncated addresses
+    for (auto it = m_addressRanges.begin(); it != m_addressRanges.end(); ++it) {
+        if (!it->IsFree) {
+            continue;
+        }
+
+        D3D12_GPU_VIRTUAL_ADDRESS alignedStart = 
+            (it->Start + alignment - 1) & ~(alignment - 1);
+            
+        if (alignedStart >= it->End) {
+            continue;
+        }
+
+        SIZE_T remainingSize = it->End - alignedStart;
+        if (remainingSize < size) {
+            continue;
+        }
+
+        // Split and allocate the range
+        if (alignedStart > it->Start) {
+            AddressRange prefix = {
+                it->Start,
+                alignedStart,
+                alignedStart - it->Start,
+                true
+            };
+            m_addressRanges.insert(it, prefix);
+        }
+
+        it->Start = alignedStart;
+        it->Size = size;
+        it->IsFree = false;
+
+        if (alignedStart + size < it->End) {
+            AddressRange suffix = {
+                alignedStart + size,
+                it->End,
+                it->End - (alignedStart + size),
+                true
+            };
+            m_addressRanges.insert(std::next(it), suffix);
+            it->End = alignedStart + size;
+        }
+
+        WARN("GVA: Allocated address %llx that may be unsafe when truncated", alignedStart);
         return alignedStart;
     }
 
@@ -282,6 +355,24 @@ void GPUVirtualAddressManager::DumpAddressMap() {
               addr, info.Size, info.HeapType,
               info.D3D11Resource != nullptr);
     }
+}
+
+bool GPUVirtualAddressManager::FindAddressByLowerBits(D3D12_GPU_VIRTUAL_ADDRESS truncated, 
+                                                     D3D12_GPU_VIRTUAL_ADDRESS& outFullAddress) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    // Mask to get lower 32 bits
+    const D3D12_GPU_VIRTUAL_ADDRESS LOWER_MASK = 0xFFFFFFFFull;
+    
+    // Search through resource map for an address with matching lower bits
+    for (const auto& entry : m_resourceMap) {
+        if ((entry.first & LOWER_MASK) == truncated) {
+            outFullAddress = entry.first;
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 } // namespace dxiided

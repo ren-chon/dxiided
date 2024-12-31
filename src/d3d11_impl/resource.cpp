@@ -282,10 +282,26 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
         return 0;
     }
     
-    // Validate the address is still registered
+    // First check if the full address is valid
     if (!GPUVirtualAddressManager::Get().ValidateAddress(m_gpuVirtualAddress)) {
-        ERR("GVA: Retrieved invalid GPU virtual address %llx", m_gpuVirtualAddress);
-        return 0;
+        // If full address is invalid, check if lower 32-bits match any valid address
+        auto& mgr = GPUVirtualAddressManager::Get();
+        D3D12_GPU_VIRTUAL_ADDRESS truncated = m_gpuVirtualAddress & 0xFFFFFFFFull;
+        
+        // Check if this address would be safe when truncated
+        if (truncated != (m_gpuVirtualAddress & 0xFFFFFFFFull)) {
+            ERR("GVA: GPU virtual address %llx would be unsafe when truncated to %llx", 
+                m_gpuVirtualAddress, truncated);
+            return 0;
+        }
+        
+        // Iterate through resource map to find matching lower bits
+        if (mgr.FindAddressByLowerBits(truncated, m_gpuVirtualAddress)) {
+            WARN("GVA: Recovered truncated address %llx -> %llx", truncated, m_gpuVirtualAddress);
+        } else {
+            ERR("GVA: Retrieved invalid GPU virtual address %llx", m_gpuVirtualAddress);
+            return 0;
+        }
     }
     
     TRACE("GVA: Retrieved address %llx", m_gpuVirtualAddress);
