@@ -280,12 +280,10 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     if (m_gpuVirtualAddress == 0) {
         return 0;
     }
-
- 
+    TRACE("m_gpuVirtualAddress %llx", m_gpuVirtualAddress);
     
     return m_gpuVirtualAddress;
 }
-
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
     TRACE("StoreInDeviceMap for resource %p, type: %d", this, m_desc.Dimension);
 

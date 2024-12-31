@@ -3,10 +3,11 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <wrl/client.h>
-#include <unordered_set>
+
 #include <list>
 #include <map>
 #include <mutex>
+#include <unordered_set>
 #include <vector>
 
 #include "common/debug.hpp"
@@ -33,7 +34,8 @@ class GPUVirtualAddressManager {
 
     // Delete copy constructor and assignment operator
     GPUVirtualAddressManager(const GPUVirtualAddressManager&) = delete;
-    GPUVirtualAddressManager& operator=(const GPUVirtualAddressManager&) = delete;
+    GPUVirtualAddressManager& operator=(const GPUVirtualAddressManager&) =
+        delete;
 
     D3D12_GPU_VIRTUAL_ADDRESS AllocateGPUVA(
         const D3D12_RESOURCE_DESC* pDesc,
@@ -52,16 +54,17 @@ class GPUVirtualAddressManager {
 
     // Find full GPU virtual address given truncated 32-bit version
     bool FindAddressByLowerBits(D3D12_GPU_VIRTUAL_ADDRESS truncated,
-                               D3D12_GPU_VIRTUAL_ADDRESS& outFullAddress);
-    
+                                D3D12_GPU_VIRTUAL_ADDRESS& outFullAddress);
+
     bool IsSafeTruncatedAddress(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size);
     // Debug helpers
     void DumpAddressMap();
-// Helper to check if lower 32 bits are available
+    // Helper to check if lower 32 bits are available
     bool IsLower32BitsAvailable(D3D12_GPU_VIRTUAL_ADDRESS addr, size_t size) {
         uint32_t truncStart = static_cast<uint32_t>(addr & 0xFFFFFFFFull);
-        uint32_t truncEnd = static_cast<uint32_t>((addr + size - 1) & 0xFFFFFFFFull);
-        
+        uint32_t truncEnd =
+            static_cast<uint32_t>((addr + size - 1) & 0xFFFFFFFFull);
+
         for (uint32_t curr = truncStart; curr <= truncEnd; curr += 0x1000) {
             if (m_usedLower32Bits.count(curr & ~0xFFFu)) {
                 return false;
@@ -69,9 +72,9 @@ class GPUVirtualAddressManager {
         }
         return true;
     }
-    
+
    private:
-   std::unordered_set<uint32_t> m_usedLower32Bits;
+    std::unordered_set<uint32_t> m_usedLower32Bits;
     // Private constructor for singleton
     GPUVirtualAddressManager();
     ~GPUVirtualAddressManager();
@@ -112,9 +115,8 @@ class GPUVirtualAddressManager {
         m_reservedRanges = {{0x0000000000000000ull, 0x0000000000000FFFull},
                             {0xFFFFFFFFFFFF0000ull, 0xFFFFFFFFFFFFFFFFull}};
 
-    // Base address for allocations
-    static constexpr D3D12_GPU_VIRTUAL_ADDRESS BASE_ADDRESS = 0x100000000ull;
-
-    
+    // Base address for allocations - start at 16MB to leave room for reserved
+    // addresses
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS BASE_ADDRESS = 0x1000000ull;
 };
 }  // namespace dxiided

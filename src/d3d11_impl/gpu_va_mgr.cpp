@@ -200,73 +200,19 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateAlignedAddress(
     
     TRACE("GVA: Attempting to allocate size %llu with alignment %llu", size, alignment);
     
-    // First try to allocate in the lower 32-bit address space
+    // Only allocate in the lower 32-bit address space
     for (auto it = m_addressRanges.begin(); it != m_addressRanges.end(); ++it) {
         if (!it->IsFree || it->Start >= (1ull << 32)) {
             continue;
         }
 
-        // Try multiple base addresses within this range
         D3D12_GPU_VIRTUAL_ADDRESS rangeStart = it->Start;
         D3D12_GPU_VIRTUAL_ADDRESS rangeEnd = std::min(it->End, (1ull << 32) - 1);
         
         // Align the start address
         D3D12_GPU_VIRTUAL_ADDRESS alignedStart = (rangeStart + alignment - 1) & ~(alignment - 1);
         
-        while (alignedStart + size <= rangeEnd) {
-            if (IsSafeTruncatedAddress(alignedStart, size)) {
-                // Update tracking for truncated addresses
-                uint32_t truncStart = static_cast<uint32_t>(alignedStart & 0xFFFFFFFFull);
-                uint32_t truncEnd = static_cast<uint32_t>((alignedStart + size - 1) & 0xFFFFFFFFull);
-                
-                for (uint32_t curr = truncStart; curr <= truncEnd; curr += 0x1000) {
-                    m_usedLower32Bits.insert(curr & ~0xFFFu);
-                }
-                
-                // Split and allocate
-                if (alignedStart > it->Start) {
-                    AddressRange prefix = {
-                        it->Start,
-                        alignedStart,
-                        alignedStart - it->Start,
-                        true
-                    };
-                    m_addressRanges.insert(it, prefix);
-                }
-
-                it->Start = alignedStart;
-                it->Size = size;
-                it->IsFree = false;
-
-                if (alignedStart + size < it->End) {
-                    AddressRange suffix = {
-                        alignedStart + size,
-                        it->End,
-                        it->End - (alignedStart + size),
-                        true
-                    };
-                    m_addressRanges.insert(std::next(it), suffix);
-                    it->End = alignedStart + size;
-                }
-
-                TRACE("GVA: Successfully allocated address %llx of size %llu", alignedStart, size);
-                return alignedStart;
-            }
-            
-            // Try next page-aligned address
-            alignedStart = (alignedStart + 0x1000) & ~0xFFFull;
-            alignedStart = (alignedStart + alignment - 1) & ~(alignment - 1);
-        }
-    }
-    
-    // If we couldn't find space in lower 32 bits, try higher addresses
-    for (auto it = m_addressRanges.begin(); it != m_addressRanges.end(); ++it) {
-        if (!it->IsFree || it->Start < (1ull << 32)) {
-            continue;
-        }
-
-        D3D12_GPU_VIRTUAL_ADDRESS alignedStart = (it->Start + alignment - 1) & ~(alignment - 1);
-        if (alignedStart < it->End && (it->End - alignedStart) >= size) {
+        if (alignedStart < rangeEnd && (rangeEnd - alignedStart) >= size) {
             // Split and allocate
             if (alignedStart > it->Start) {
                 AddressRange prefix = {
@@ -298,7 +244,7 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateAlignedAddress(
         }
     }
     
-    ERR("GVA: Failed to allocate aligned address of size %llu", size);
+    ERR("GVA: Failed to allocate address in 32-bit range, size %llu", size);
     return GPU_VA_NULL;
 }
 
@@ -363,14 +309,25 @@ bool GPUVirtualAddressManager::FindAddressByLowerBits(D3D12_GPU_VIRTUAL_ADDRESS 
     // Mask to get lower 32 bits
     const D3D12_GPU_VIRTUAL_ADDRESS LOWER_MASK = 0xFFFFFFFFull;
     
-    // Search through resource map for an address with matching lower bits
+    // First try to find an exact match in active resources
     for (const auto& entry : m_resourceMap) {
-        if ((entry.first & LOWER_MASK) == truncated) {
+        if ((entry.first & LOWER_MASK) == truncated && entry.second.D3D11Resource) {
             outFullAddress = entry.first;
+            TRACE("GVA: Found exact match for truncated address %llx -> %llx", truncated, outFullAddress);
             return true;
         }
     }
     
+    // If no active resource found, try any allocated address
+    for (const auto& entry : m_resourceMap) {
+        if ((entry.first & LOWER_MASK) == truncated) {
+            outFullAddress = entry.first;
+            TRACE("GVA: Found potential match for truncated address %llx -> %llx", truncated, outFullAddress);
+            return true;
+        }
+    }
+    
+    ERR("GVA: Failed to recover truncated address %llx", truncated);
     return false;
 }
 
