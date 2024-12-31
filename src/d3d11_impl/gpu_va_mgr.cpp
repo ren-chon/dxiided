@@ -34,7 +34,17 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateGPUVA(
     
     D3D12_GPU_VIRTUAL_ADDRESS address = AllocateAlignedAddress(size, alignment);
     if (address == GPU_VA_NULL) {
+        ERR("GVA: Failed to allocate aligned address of size %llu with alignment %llu", size, alignment);
         return GPU_VA_INVALID;
+    }
+
+    // Validate the address is not in reserved ranges
+    for (const auto& range : m_reservedRanges) {
+        if (address >= range.first && address <= range.second) {
+            ERR("GVA: Allocated address %llx falls within reserved range [%llx-%llx]", 
+                address, range.first, range.second);
+            return GPU_VA_INVALID;
+        }
     }
 
     // Create temporary resource info without D3D11 resource
@@ -50,6 +60,7 @@ D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateGPUVA(
     };
     
     m_resourceMap[address] = info;
+    TRACE("GVA: Successfully allocated address %llx of size %llu", address, size);
     return address;
 }
 
@@ -85,10 +96,17 @@ bool GPUVirtualAddressManager::RegisterResource(
     
     auto it = m_resourceMap.find(address);
     if (it == m_resourceMap.end()) {
+        ERR("GVA: Failed to register resource - address %llx not found in resource map", address);
+        return false;
+    }
+
+    if (!resource) {
+        ERR("GVA: Failed to register resource - null D3D11 resource provided");
         return false;
     }
 
     it->second.D3D11Resource = resource;
+    TRACE("GVA: Successfully registered D3D11 resource at address %llx", address);
     return true;
 }
 

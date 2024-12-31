@@ -25,8 +25,15 @@ class GPUVirtualAddressManager {
     static constexpr UINT64 TEXTURE_DATA_ALIGNMENT = 512;            // 512B
     static constexpr UINT64 UAV_COUNTER_ALIGNMENT = 4096;            // 4KB
 
-    GPUVirtualAddressManager();
-    ~GPUVirtualAddressManager();
+    // Singleton access
+    static GPUVirtualAddressManager& Get() {
+        static GPUVirtualAddressManager instance;
+        return instance;
+    }
+
+    // Delete copy constructor and assignment operator
+    GPUVirtualAddressManager(const GPUVirtualAddressManager&) = delete;
+    GPUVirtualAddressManager& operator=(const GPUVirtualAddressManager&) = delete;
 
     D3D12_GPU_VIRTUAL_ADDRESS AllocateGPUVA(
         const D3D12_RESOURCE_DESC* pDesc,
@@ -47,6 +54,10 @@ class GPUVirtualAddressManager {
     void DumpAddressMap();
 
    private:
+    // Private constructor for singleton
+    GPUVirtualAddressManager();
+    ~GPUVirtualAddressManager();
+
     struct ResourceInfo {
         D3D12_RESOURCE_DIMENSION Dimension;
         D3D12_RESOURCE_FLAGS Flags;
