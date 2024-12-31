@@ -12,6 +12,7 @@
 #include "d3d11_impl/resource.hpp"
 #include "d3d11_impl/fence.hpp"
 #include "d3d11_impl/heap.hpp"
+#include "d3d11_impl/gpu_va_mgr.hpp"
 
 const GUID IID_IUnknown = {0x00000000,
                            0x0000,
@@ -25,7 +26,8 @@ WrappedD3D12ToD3D11Device::WrappedD3D12ToD3D11Device(Microsoft::WRL::ComPtr<ID3D
                          D3D_FEATURE_LEVEL feature_level)
     : m_d3d11Device(device),
       m_d3d11Context(context),
-      m_featureLevel(feature_level) {}
+      m_featureLevel(feature_level),
+        m_gpuVAManager(std::make_unique<GPUVirtualAddressManager>()) {}
 
 HRESULT WrappedD3D12ToD3D11Device::Create(IUnknown* adapter,
                             D3D_FEATURE_LEVEL minimum_feature_level,

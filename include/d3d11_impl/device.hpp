@@ -17,6 +17,7 @@ namespace dxiided {
 
 class WrappedD3D12ToD3D11CommandList;
 class WrappedD3D12ToD3D11CommandQueue;
+class GPUVirtualAddressManager;
 
 class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
                          public ID3D12DebugDevice,
@@ -317,6 +318,9 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     ID3D11Resource* GetD3D11Resource(ID3D12Resource* d3d12Resource);
     ID3D12Resource* GetD3D12Resource(ID3D11Resource* d3d11Resource);
     void StoreD3D11ResourceMapping(ID3D12Resource* d3d12Resource, ID3D11Resource* d3d11Resource);
+
+    GPUVirtualAddressManager* GetGPUVAManager() { return m_gpuVAManager.get(); }
+
    private:
     WrappedD3D12ToD3D11Device(Microsoft::WRL::ComPtr<ID3D11Device> device,
                 Microsoft::WRL::ComPtr<ID3D11DeviceContext> context,
@@ -339,6 +343,8 @@ class WrappedD3D12ToD3D11Device final : public ID3D12Device2,
     std::mutex m_resourceMappingMutex;
     std::unordered_map<ID3D12Resource*, ID3D11Resource*> m_d3d12ToD3d11Resources;
     std::unordered_map<ID3D11Resource*, ID3D12Resource*> m_d3d11ToD3d12Resources;
+        std::unique_ptr<GPUVirtualAddressManager> m_gpuVAManager;
+
 };
 
 }  // namespace dxiided

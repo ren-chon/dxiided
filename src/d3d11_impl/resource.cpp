@@ -238,7 +238,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
 WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
     TRACE("Destroying resource this=%p", this);
     if (m_gpuVirtualAddress != 0) {
-        GPUVirtualAddressManager().FreeGPUVA(m_gpuVirtualAddress, m_desc.Width);
+        m_device->GetGPUVAManager()->FreeGPUVA(m_gpuVirtualAddress, m_desc.Width);
     }
 }
 
@@ -246,7 +246,7 @@ D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     TRACE("GetGPUVirtualAddress called");
     if (m_gpuVirtualAddress == 0 && m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
         // Only allocate VA for buffers
-        m_gpuVirtualAddress = GPUVirtualAddressManager().AllocateGPUVA(m_desc.Width);
+        m_gpuVirtualAddress = m_device->GetGPUVAManager()->AllocateGPUVA(m_desc.Width);
         TRACE("Allocated GPU VA %llx for buffer resource", m_gpuVirtualAddress);
     }
     return m_gpuVirtualAddress;
