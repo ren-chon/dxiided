@@ -20,3 +20,38 @@ we are createing a downgrade layer that allows DirectX 12 games and applications
 - always analyze files before committing any changes
 - always analyze file mentioned in the logs stack one by one to fix potential issues
 - ask for game disassembly pesudo ghidra code analysis or assembly to understand how the target application or game is behaving
+# files in directory
+    - src/d3d11_impl/device_features.hpp
+    - src/d3d11_impl/command_allocator.cpp
+    - src/d3d11_impl/command_list.cpp
+    - src/d3d11_impl/command_queue.cpp
+    - src/d3d11_impl/descriptor_heap.cpp
+    - src/d3d11_impl/device.cpp
+    - src/d3d11_impl/fence.cpp
+    - src/d3d11_impl/gpu_va_mgr.cpp
+    - src/d3d11_impl/heap.cpp
+    - src/d3d11_impl/pipeline_state.cpp
+    - src/d3d11_impl/resource.cpp
+    - src/d3d11_impl/resource_view_cache.cpp
+    - src/d3d11_impl/shader_library.cpp
+    - src/d3d11_impl/shader_resource_binding.cpp
+    - src/d3d11_impl/swap_chain.cpp
+    - src/main.cpp
+    - src/common/debug.cpp
+    - include/common/debug.hpp
+    - include/d3d11_impl/command_allocator.hpp
+    - include/d3d11_impl/command_list.hpp
+    - include/d3d11_impl/command_queue.hpp
+    - include/d3d11_impl/descriptor_heap.hpp
+    - include/d3d11_impl/device.hpp
+    - include/d3d11_impl/device_features.hpp
+    - include/d3d11_impl/fence.hpp
+    - include/d3d11_impl/gpu_va_mgr.hpp
+    - include/d3d11_impl/heap.hpp
+    - include/d3d11_impl/pipeline_state.hpp
+    - include/d3d11_impl/resource.hpp
+    - include/d3d11_impl/resource_view_cache.hpp
+    - include/d3d11_impl/shader_library.hpp
+    - include/d3d11_impl/shader_resource_binding.hpp
+    - include/d3d11_impl/swap_chain.hpp
+    - include/d3d11_impl/stb_image_write.h

@@ -76,16 +76,6 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
       m_isUAV(false),
       m_format(pDesc->Format),
       m_gpuVirtualAddress(0) {
-    // Allocate GPU VA first
-    m_gpuVirtualAddress =
-        GPUVirtualAddressManager::Get().AllocateGPUVA(pDesc, pHeapProperties);
-
-    if (m_gpuVirtualAddress == GPUVirtualAddressManager::GPU_VA_INVALID) {
-        ERR("GVA: Failed to allocate GPU virtual address");
-        return;
-    }
-
-    TRACE("GVA: Allocated address %llx for resource", m_gpuVirtualAddress);
 
     // If it looks like a buffer (1D with height=1), treat it as one
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
@@ -220,8 +210,7 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
                 break;
         }
     }
-    GPUVirtualAddressManager::Get().RegisterResource(
-        m_gpuVirtualAddress, m_resource.Get(), pDesc, pHeapProperties);
+
     TRACE(
         "Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
         m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
@@ -242,46 +231,24 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
       m_format(pDesc->Format),
       m_gpuVirtualAddress(0) {
     if (resource) {
-         // Default heap properties for existing D3D11 resources
-        m_heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-        m_heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        m_heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-        m_heapProperties.CreationNodeMask = 1;
-        m_heapProperties.VisibleNodeMask = 1;
-        
-        // Allocate GPU VA for the resource
-        m_gpuVirtualAddress = GPUVirtualAddressManager::Get().AllocateGPUVA(pDesc, &m_heapProperties);
-        if (m_gpuVirtualAddress != GPUVirtualAddressManager::GPU_VA_INVALID) {
-            TRACE("GVA: Allocated address %llx for existing D3D11 resource", m_gpuVirtualAddress);
-            if (!GPUVirtualAddressManager::Get().RegisterResource(m_gpuVirtualAddress, resource, pDesc, &m_heapProperties)) {
-                ERR("GVA: Failed to register resource after allocation");
-                GPUVirtualAddressManager::Get().FreeGPUVA(m_gpuVirtualAddress);
-                m_gpuVirtualAddress = 0;
-            }
-        } else {
-            ERR("GVA: Failed to allocate GPU virtual address for existing D3D11 resource");
-        }
-        
         StoreInDeviceMap();
-    } else {
-        ERR("GVA: Null D3D11 resource provided");
     }
 }
 
 WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
     TRACE("Destroying resource this=%p", this);
     if (m_gpuVirtualAddress != 0) {
-        GPUVirtualAddressManager::Get().FreeGPUVA(m_gpuVirtualAddress);
+        GPUVirtualAddressManager().FreeGPUVA(m_gpuVirtualAddress, m_desc.Width);
     }
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     TRACE("GetGPUVirtualAddress called");
-    if (m_gpuVirtualAddress == 0) {
-        return 0;
+    if (m_gpuVirtualAddress == 0 && m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+        // Only allocate VA for buffers
+        m_gpuVirtualAddress = GPUVirtualAddressManager().AllocateGPUVA(m_desc.Width);
+        TRACE("Allocated GPU VA %llx for buffer resource", m_gpuVirtualAddress);
     }
-    TRACE("m_gpuVirtualAddress %llx", m_gpuVirtualAddress);
-    
     return m_gpuVirtualAddress;
 }
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
