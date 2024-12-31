@@ -115,6 +115,8 @@ class WrappedD3D12ToD3D11PipelineState final : public ID3D12PipelineState {
                               PipelineStateKeyHasher>
         s_pipelineStateCache;
     static std::mutex s_cacheMutex;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC m_desc;
 };
 
 }  // namespace dxiided

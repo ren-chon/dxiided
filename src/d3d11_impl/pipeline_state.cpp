@@ -1,7 +1,8 @@
 #include "d3d11_impl/pipeline_state.hpp"
-#include "d3d11_impl/shader_library.hpp"
-#include "d3d11_impl/device.hpp"
 
+#include "d3d11_impl/device.hpp"
+#include "d3d11_impl/shader_library.hpp"
+#include <cmath>
 namespace dxiided {
 
 // Static member initialization
@@ -174,70 +175,16 @@ WrappedD3D12ToD3D11PipelineState::WrappedD3D12ToD3D11PipelineState(
 HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* pDesc) {
     TRACE("Initializing graphics pipeline state");
-    TRACE("D3D12_GRAPHICS_PIPELINE_STATE_DESC:");
-    TRACE("  pRootSignature: %p", pDesc->pRootSignature);
-    TRACE("  VS: {pShaderBytecode: %p, BytecodeLength: %zu}",
-          pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength);
-    TRACE("  PS: {pShaderBytecode: %p, BytecodeLength: %zu}",
-          pDesc->PS.pShaderBytecode, pDesc->PS.BytecodeLength);
-    TRACE("  DS: {pShaderBytecode: %p, BytecodeLength: %zu}",
-          pDesc->DS.pShaderBytecode, pDesc->DS.BytecodeLength);
-    TRACE("  HS: {pShaderBytecode: %p, BytecodeLength: %zu}",
-          pDesc->HS.pShaderBytecode, pDesc->HS.BytecodeLength);
-    TRACE("  GS: {pShaderBytecode: %p, BytecodeLength: %zu}",
-          pDesc->GS.pShaderBytecode, pDesc->GS.BytecodeLength);
-    TRACE(
-        "  StreamOutput: {pSODeclaration: %p, NumEntries: %u, pBufferStrides: "
-        "%p, NumStrides: %u, RasterizedStream: %u}",
-        pDesc->StreamOutput.pSODeclaration, pDesc->StreamOutput.NumEntries,
-        pDesc->StreamOutput.pBufferStrides, pDesc->StreamOutput.NumStrides,
-        pDesc->StreamOutput.RasterizedStream);
-    TRACE(
-        "  BlendState: {AlphaToCoverageEnable: %d, IndependentBlendEnable: %d}",
-        pDesc->BlendState.AlphaToCoverageEnable,
-        pDesc->BlendState.IndependentBlendEnable);
-    TRACE("  SampleMask: 0x%X", pDesc->SampleMask);
-    TRACE(
-        "  RasterizerState: {FillMode: %d, CullMode: %d, "
-        "FrontCounterClockwise: %d, DepthBias: %d, DepthBiasClamp: %f, "
-        "SlopeScaledDepthBias: %f, DepthClipEnable: %d, MultisampleEnable: %d, "
-        "AntialiasedLineEnable: %d, ForcedSampleCount: %u, ConservativeRaster: "
-        "%d}",
-        pDesc->RasterizerState.FillMode, pDesc->RasterizerState.CullMode,
-        pDesc->RasterizerState.FrontCounterClockwise,
-        pDesc->RasterizerState.DepthBias, pDesc->RasterizerState.DepthBiasClamp,
-        pDesc->RasterizerState.SlopeScaledDepthBias,
-        pDesc->RasterizerState.DepthClipEnable,
-        pDesc->RasterizerState.MultisampleEnable,
-        pDesc->RasterizerState.AntialiasedLineEnable,
-        pDesc->RasterizerState.ForcedSampleCount,
-        pDesc->RasterizerState.ConservativeRaster);
-    TRACE(
-        "  DepthStencilState: {DepthEnable: %d, DepthWriteMask: %d, DepthFunc: "
-        "%d, StencilEnable: %d, StencilReadMask: 0x%X, StencilWriteMask: 0x%X}",
-        pDesc->DepthStencilState.DepthEnable,
-        pDesc->DepthStencilState.DepthWriteMask,
-        pDesc->DepthStencilState.DepthFunc,
-        pDesc->DepthStencilState.StencilEnable,
-        pDesc->DepthStencilState.StencilReadMask,
-        pDesc->DepthStencilState.StencilWriteMask);
-    TRACE("  InputLayout: {pInputElementDescs: %p, NumElements: %u}",
-          pDesc->InputLayout.pInputElementDescs,
-          pDesc->InputLayout.NumElements);
-    TRACE("  IBStripCutValue: %d", pDesc->IBStripCutValue);
-    TRACE("  PrimitiveTopologyType: %d", pDesc->PrimitiveTopologyType);
-    TRACE("  NumRenderTargets: %u", pDesc->NumRenderTargets);
-    TRACE("  RTVFormats: [%d, %d, %d, %d, %d, %d, %d, %d]",
-          pDesc->RTVFormats[0], pDesc->RTVFormats[1], pDesc->RTVFormats[2],
-          pDesc->RTVFormats[3], pDesc->RTVFormats[4], pDesc->RTVFormats[5],
-          pDesc->RTVFormats[6], pDesc->RTVFormats[7]);
-    TRACE("  DSVFormat: %d", pDesc->DSVFormat);
-    TRACE("  SampleDesc: {Count: %u, Quality: %u}", pDesc->SampleDesc.Count,
-          pDesc->SampleDesc.Quality);
-    TRACE("  NodeMask: 0x%X", pDesc->NodeMask);
-    TRACE("  CachedPSO: {pCachedBlob: %p, CachedBlobSizeInBytes: %zu}",
-          pDesc->CachedPSO.pCachedBlob, pDesc->CachedPSO.CachedBlobSizeInBytes);
-    TRACE("  Flags: 0x%X", pDesc->Flags);
+    if (!pDesc) {
+        ERR("Null pipeline state descriptor");
+        return E_INVALIDARG;
+    }
+    TRACE("Initializing graphics pipeline state");
+    TRACE("VS BytecodeLength: %zu", pDesc->VS.BytecodeLength);
+    TRACE("PS BytecodeLength: %zu", pDesc->PS.BytecodeLength);
+    TRACE("NumRenderTargets: %u", pDesc->NumRenderTargets);
+    // Store original desc for debugging
+    m_desc = *pDesc;
 
     // Verify D3D11 device is valid
     ID3D11Device* d3d11Device = m_device->GetD3D11Device();
@@ -245,82 +192,28 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
         ERR("D3D11 device is null");
         return E_FAIL;
     }
-    // Create vertex shader
-    if (pDesc->VS.pShaderBytecode && pDesc->VS.BytecodeLength) {
-        TRACE("Creating vertex shader with bytecode length %zu",
-              pDesc->VS.BytecodeLength);
-        TRACE("VS Bytecode Details:");
-        TRACE("  Raw pointer value: %p", pDesc->VS.pShaderBytecode);
-        TRACE("  High 32 bits: 0x%08x",
-              (uint32_t)((uint64_t)pDesc->VS.pShaderBytecode >> 32));
-        TRACE("  Low 32 bits: 0x%08x",
-              (uint32_t)((uint64_t)pDesc->VS.pShaderBytecode));
-        // Special case: Some applications pass very small bytecode lengths
-        if (pDesc->VS.BytecodeLength < 4) {
-            WARN(
-                "Vertex shader bytecode length too small: %zu bytes. Treating "
-                "as null shader.",
-                pDesc->VS.BytecodeLength);
+    // Create vertex shader if provided
+    if (pDesc->VS.BytecodeLength > 0) {
+        if (pDesc->VS.BytecodeLength == 1) {
+            // Special built-in shader
             uint64_t specialValue =
                 reinterpret_cast<uint64_t>(pDesc->VS.pShaderBytecode);
-            TRACE("  Special shader value: 0x%016llx", specialValue);
-
             m_vertexShader = D3D11ShaderLibrary::GetBuiltinVertexShader(
                 m_device->GetD3D11Device(), specialValue);
-
             if (!m_vertexShader) {
-                WARN(
-                    "No built-in shader found for value 0x%016llx, treating as "
-                    "null shader",
-                    specialValue);
+                ERR("Failed to create built-in vertex shader");
+                return E_FAIL;
             }
-
-            return S_OK;
+        } else {
+            // Regular shader
+            HRESULT hrV = m_device->GetD3D11Device()->CreateVertexShader(
+                pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength, nullptr,
+                &m_vertexShader);
+            if (FAILED(hrV)) {
+                ERR("Failed to create vertex shader, hrV=%08x", hrV);
+                return hrV;
+            }
         }
-
-        // Validate minimum shader bytecode size for DXBC header
-        if (pDesc->VS.BytecodeLength <
-            20) {  // DXBC header is at least 20 bytes
-            ERR("Invalid vertex shader: Bytecode length %zu bytes is too small "
-                "for DXBC header (minimum 20 bytes)",
-                pDesc->VS.BytecodeLength);
-            return E_INVALIDARG;
-        }
-
-        // Validate DXBC signature and version
-        const uint32_t* dwordData =
-            static_cast<const uint32_t*>(pDesc->VS.pShaderBytecode);
-        const uint8_t* byteData =
-            static_cast<const uint8_t*>(pDesc->VS.pShaderBytecode);
-
-        // Check for DXBC signature
-        if (byteData[0] != 'D' || byteData[1] != 'X' || byteData[2] != 'B' ||
-            byteData[3] != 'C') {
-            ERR("Invalid vertex shader: Missing DXBC signature (got: %c%c%c%c)",
-                byteData[0], byteData[1], byteData[2], byteData[3]);
-            return E_INVALIDARG;
-        }
-
-        // Log first 32 bytes of shader bytecode for debugging
-        TRACE("Shader bytecode header:");
-        for (size_t i = 0; i < std::min<size_t>(32, pDesc->VS.BytecodeLength);
-             i++) {
-            if (i % 16 == 0) TRACE("\n  %04zx:", i);
-            TRACE(" %02x", byteData[i]);
-        }
-        TRACE("\n");
-
-        // Create the shader
-        HRESULT hr = m_device->GetD3D11Device()->CreateVertexShader(
-            pDesc->VS.pShaderBytecode, pDesc->VS.BytecodeLength, nullptr,
-            &m_vertexShader);
-        if (FAILED(hr)) {
-            ERR("Failed to create vertex shader, hr %#x. Bytecode length: %zu",
-                hr, pDesc->VS.BytecodeLength);
-            return hr;
-        }
-
-        TRACE("Successfully created vertex shader");
     }
 
     // Create stream output if requested
@@ -446,55 +339,115 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
     }
 
     // Create blend state
-    D3D11_BLEND_DESC blendDesc = {};
-    blendDesc.AlphaToCoverageEnable = pDesc->BlendState.AlphaToCoverageEnable;
-    blendDesc.IndependentBlendEnable = pDesc->BlendState.IndependentBlendEnable;
-    for (UINT i = 0; i < 8; i++) {
-        const auto& d3d12RT = pDesc->BlendState.RenderTarget[i];
-        auto& d3d11RT = blendDesc.RenderTarget[i];
+    // First add validation for the blend state desc
+    if (pDesc->BlendState.IndependentBlendEnable > 1) {
+        WARN("Invalid IndependentBlendEnable value: %d, defaulting to FALSE",
+             pDesc->BlendState.IndependentBlendEnable);
 
-        d3d11RT.BlendEnable = d3d12RT.BlendEnable;
-        d3d11RT.SrcBlend = static_cast<D3D11_BLEND>(d3d12RT.SrcBlend);
-        d3d11RT.DestBlend = static_cast<D3D11_BLEND>(d3d12RT.DestBlend);
-        d3d11RT.BlendOp = static_cast<D3D11_BLEND_OP>(d3d12RT.BlendOp);
-        d3d11RT.SrcBlendAlpha = static_cast<D3D11_BLEND>(d3d12RT.SrcBlendAlpha);
-        d3d11RT.DestBlendAlpha =
-            static_cast<D3D11_BLEND>(d3d12RT.DestBlendAlpha);
-        d3d11RT.BlendOpAlpha =
-            static_cast<D3D11_BLEND_OP>(d3d12RT.BlendOpAlpha);
-        d3d11RT.RenderTargetWriteMask = d3d12RT.RenderTargetWriteMask;
-    }
+        // Create a default blend state desc
+        D3D11_BLEND_DESC blendDesc = {};
+        blendDesc.AlphaToCoverageEnable = FALSE;
+        blendDesc.IndependentBlendEnable = FALSE;
 
-    HRESULT hr =
-        m_device->GetD3D11Device()->CreateBlendState(&blendDesc, &m_blendState);
-    if (FAILED(hr)) {
-        ERR("Failed to create blend state, hr %#x.", hr);
-        return hr;
+        // Set up default blend state for the first render target
+        blendDesc.RenderTarget[0].BlendEnable = FALSE;
+        blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+        blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+        blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+        blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        blendDesc.RenderTarget[0].RenderTargetWriteMask =
+            D3D11_COLOR_WRITE_ENABLE_ALL;
+
+        HRESULT hr = m_device->GetD3D11Device()->CreateBlendState(
+            &blendDesc, &m_blendState);
+        if (FAILED(hr)) {
+            ERR("Failed to create default blend state, hr %#x", hr);
+            return hr;
+        }
+
+        TRACE("Created default blend state due to invalid input parameters");
+    } else {
+        // Convert D3D12 blend desc to D3D11
+        D3D11_BLEND_DESC blendDesc = {};
+        blendDesc.AlphaToCoverageEnable =
+            pDesc->BlendState.AlphaToCoverageEnable;
+        blendDesc.IndependentBlendEnable =
+            pDesc->BlendState.IndependentBlendEnable;
+
+        // Copy render target blend states
+        for (UINT i = 0; i < 8; i++) {
+            auto& rt = blendDesc.RenderTarget[i];
+            auto& d3d12_rt = pDesc->BlendState.RenderTarget[i];
+
+            rt.BlendEnable = d3d12_rt.BlendEnable;
+            rt.SrcBlend = static_cast<D3D11_BLEND>(d3d12_rt.SrcBlend);
+            rt.DestBlend = static_cast<D3D11_BLEND>(d3d12_rt.DestBlend);
+            rt.BlendOp = static_cast<D3D11_BLEND_OP>(d3d12_rt.BlendOp);
+            rt.SrcBlendAlpha = static_cast<D3D11_BLEND>(d3d12_rt.SrcBlendAlpha);
+            rt.DestBlendAlpha =
+                static_cast<D3D11_BLEND>(d3d12_rt.DestBlendAlpha);
+            rt.BlendOpAlpha =
+                static_cast<D3D11_BLEND_OP>(d3d12_rt.BlendOpAlpha);
+            rt.RenderTargetWriteMask = d3d12_rt.RenderTargetWriteMask;
+        }
+
+        HRESULT hr = m_device->GetD3D11Device()->CreateBlendState(
+            &blendDesc, &m_blendState);
+        if (FAILED(hr)) {
+            ERR("Failed to create blend state from D3D12 desc, hr %#x", hr);
+            return hr;
+        }
+
+        TRACE("Successfully created blend state from D3D12 desc");
     }
 
     // Create rasterizer state
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
-    rasterizerDesc.FillMode =
-        static_cast<D3D11_FILL_MODE>(pDesc->RasterizerState.FillMode);
-    rasterizerDesc.CullMode =
-        static_cast<D3D11_CULL_MODE>(pDesc->RasterizerState.CullMode);
-    rasterizerDesc.FrontCounterClockwise =
-        pDesc->RasterizerState.FrontCounterClockwise;
+    
+    // Validate and convert FillMode
+    auto fillMode = static_cast<D3D11_FILL_MODE>(pDesc->RasterizerState.FillMode);
+    if (fillMode != D3D11_FILL_WIREFRAME && fillMode != D3D11_FILL_SOLID) {
+        WARN("Invalid FillMode value: %d, defaulting to SOLID", fillMode);
+        rasterizerDesc.FillMode = D3D11_FILL_SOLID;
+    } else {
+        rasterizerDesc.FillMode = fillMode;
+    }
+
+    // Validate and convert CullMode
+    auto cullMode = static_cast<D3D11_CULL_MODE>(pDesc->RasterizerState.CullMode);
+    if (cullMode != D3D11_CULL_NONE && cullMode != D3D11_CULL_FRONT && cullMode != D3D11_CULL_BACK) {
+        WARN("Invalid CullMode value: %d, defaulting to BACK", cullMode);
+        rasterizerDesc.CullMode = D3D11_CULL_BACK;
+    } else {
+        rasterizerDesc.CullMode = cullMode;
+    }
+
+    rasterizerDesc.FrontCounterClockwise = pDesc->RasterizerState.FrontCounterClockwise ? TRUE : FALSE;
     rasterizerDesc.DepthBias = pDesc->RasterizerState.DepthBias;
     rasterizerDesc.DepthBiasClamp = pDesc->RasterizerState.DepthBiasClamp;
-    rasterizerDesc.SlopeScaledDepthBias =
-        pDesc->RasterizerState.SlopeScaledDepthBias;
-    rasterizerDesc.DepthClipEnable = pDesc->RasterizerState.DepthClipEnable;
+    rasterizerDesc.SlopeScaledDepthBias = pDesc->RasterizerState.SlopeScaledDepthBias;
+    rasterizerDesc.DepthClipEnable = pDesc->RasterizerState.DepthClipEnable ? TRUE : FALSE;
     rasterizerDesc.ScissorEnable = TRUE;  // D3D12 always enables scissor
-    rasterizerDesc.MultisampleEnable = pDesc->RasterizerState.MultisampleEnable;
-    rasterizerDesc.AntialiasedLineEnable =
-        pDesc->RasterizerState.AntialiasedLineEnable;
+    rasterizerDesc.MultisampleEnable = pDesc->RasterizerState.MultisampleEnable ? TRUE : FALSE;
+    rasterizerDesc.AntialiasedLineEnable = pDesc->RasterizerState.AntialiasedLineEnable ? TRUE : FALSE;
 
-    hr = m_device->GetD3D11Device()->CreateRasterizerState(&rasterizerDesc,
-                                                           &m_rasterizerState);
-    if (FAILED(hr)) {
-        ERR("Failed to create rasterizer state, hr %#x.", hr);
-        return hr;
+    // Clamp depth bias values to valid ranges
+    if (!std::isfinite(rasterizerDesc.DepthBiasClamp)) {
+        WARN("Invalid DepthBiasClamp value, defaulting to 0.0f");
+        rasterizerDesc.DepthBiasClamp = 0.0f;
+    }
+    
+    if (!std::isfinite(rasterizerDesc.SlopeScaledDepthBias)) {
+        WARN("Invalid SlopeScaledDepthBias value, defaulting to 0.0f");
+        rasterizerDesc.SlopeScaledDepthBias = 0.0f;
+    }
+
+    HRESULT hrRS = m_device->GetD3D11Device()->CreateRasterizerState(&rasterizerDesc, &m_rasterizerState);
+    if (FAILED(hrRS)) {
+        ERR("Failed to create rasterizer state, hr %#x.", hrRS);
+        return hrRS;
     }
 
     // Create depth-stencil state
@@ -529,13 +482,14 @@ HRESULT WrappedD3D12ToD3D11PipelineState::InitializeGraphics(
     depthStencilDesc.BackFace.StencilFunc =
         static_cast<D3D11_COMPARISON_FUNC>(backFace.StencilFunc);
 
-    hr = m_device->GetD3D11Device()->CreateDepthStencilState(
+    HRESULT hrDSS = m_device->GetD3D11Device()->CreateDepthStencilState(
         &depthStencilDesc, &m_depthStencilState);
-    if (FAILED(hr)) {
-        ERR("Failed to create depth-stencil state, hr %#x.", hr);
-        return hr;
+    if (FAILED(hrDSS)) {
+        ERR("Failed to create depth-stencil state, hrDSS %#x.", hrDSS);
+        return hrDSS;
     }
 
+    TRACE("Graphics pipeline state initialized successfully");
     return S_OK;
 }
 
@@ -690,39 +644,79 @@ WrappedD3D12ToD3D11PipelineState::GetCachedBlob(ID3DBlob** ppBlob) {
 
 void WrappedD3D12ToD3D11PipelineState::Apply(ID3D11DeviceContext* context) {
     TRACE("WrappedD3D12ToD3D11PipelineState::Apply");
+    TRACE("WrappedD3D12ToD3D11PipelineState::Apply");
 
-    if (m_vertexShader) {
-        context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    if (!context) {
+        ERR("Null context passed to Apply()");
+        return;
     }
-    if (m_pixelShader) {
-        context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-    }
+
+    // Vertex Shader Stage
+    TRACE("Setting vertex shader state");
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+
+    // Pixel Shader Stage
+    TRACE("Setting pixel shader state");
+    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+
+    // Geometry/Stream-Out Stage
+    TRACE("Setting geometry shader state");
     if (m_streamOutShader) {
         context->GSSetShader(m_streamOutShader.Get(), nullptr, 0);
     } else if (m_geometryShader) {
         context->GSSetShader(m_geometryShader.Get(), nullptr, 0);
+    } else {
+        // Explicitly clear GS stage if no shader is set
+        context->GSSetShader(nullptr, nullptr, 0);
     }
-    if (m_hullShader) {
-        context->HSSetShader(m_hullShader.Get(), nullptr, 0);
-    }
-    if (m_domainShader) {
-        context->DSSetShader(m_domainShader.Get(), nullptr, 0);
-    }
-    if (m_computeShader) {
-        context->CSSetShader(m_computeShader.Get(), nullptr, 0);
-    }
+
+    // Hull Shader Stage
+    TRACE("Setting hull shader state");
+    context->HSSetShader(m_hullShader.Get(), nullptr, 0);
+
+    // Domain Shader Stage
+    TRACE("Setting domain shader state");
+    context->DSSetShader(m_domainShader.Get(), nullptr, 0);
+
+    // Compute Shader Stage
+    TRACE("Setting compute shader state");
+    context->CSSetShader(m_computeShader.Get(), nullptr, 0);
+
+    // Input Assembly Stage
+    TRACE("Setting input layout");
     if (m_inputLayout) {
         context->IASetInputLayout(m_inputLayout.Get());
+    } else {
+        // For fullscreen triangle, we don't need input layout
+        context->IASetInputLayout(nullptr);
     }
+
+    // Output Merger Stage
+    TRACE("Setting blend state");
     if (m_blendState) {
-        context->OMSetBlendState(m_blendState.Get(), nullptr, 0xffffffff);
+        float blendFactor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        context->OMSetBlendState(m_blendState.Get(), blendFactor, 0xffffffff);
+    } else {
+        context->OMSetBlendState(nullptr, nullptr, 0xffffffff);
     }
+
+    // Rasterizer Stage
+    TRACE("Setting rasterizer state");
     if (m_rasterizerState) {
         context->RSSetState(m_rasterizerState.Get());
+    } else {
+        context->RSSetState(nullptr);
     }
+
+    // Depth-Stencil Stage
+    TRACE("Setting depth-stencil state");
     if (m_depthStencilState) {
         context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
+    } else {
+        context->OMSetDepthStencilState(nullptr, 0);
     }
+
+    TRACE("Pipeline state applied successfully");
 }
 
 }  // namespace dxiided
