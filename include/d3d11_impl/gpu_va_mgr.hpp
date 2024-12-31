@@ -1,30 +1,89 @@
 #pragma once
 
+#include <d3d11.h>
 #include <d3d12.h>
-#include <unordered_map>
-#include <windows.h>
+#include <wrl/client.h>
+
+#include <list>
+#include <map>
+#include <mutex>
+#include <vector>
+
+#include "common/debug.hpp"
 
 namespace dxiided {
 
+typedef UINT64 D3D12_GPU_VIRTUAL_ADDRESS;
+
 class GPUVirtualAddressManager {
-public:
-    static GPUVirtualAddressManager& Get();
+   public:
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS GPU_VA_NULL = 0;
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS GPU_VA_INVALID = ~0ull;
+    static constexpr UINT64 DEFAULT_RESOURCE_ALIGNMENT = 64 * 1024;  // 64KB
+    static constexpr UINT64 SMALL_RESOURCE_ALIGNMENT = 4 * 1024;     // 4KB
+    static constexpr UINT64 CONSTANT_BUFFER_ALIGNMENT = 256;         // 256B
+    static constexpr UINT64 TEXTURE_DATA_ALIGNMENT = 512;            // 512B
+    static constexpr UINT64 UAV_COUNTER_ALIGNMENT = 4096;            // 4KB
 
-    D3D12_GPU_VIRTUAL_ADDRESS Allocate(const D3D12_RESOURCE_DESC* pDesc);
-    void Free(D3D12_GPU_VIRTUAL_ADDRESS address);
+    GPUVirtualAddressManager();
+    ~GPUVirtualAddressManager();
 
-private:
-    GPUVirtualAddressManager() = default;
-    ~GPUVirtualAddressManager() = default;
-    
-    GPUVirtualAddressManager(const GPUVirtualAddressManager&) = delete;
-    GPUVirtualAddressManager& operator=(const GPUVirtualAddressManager&) = delete;
+    D3D12_GPU_VIRTUAL_ADDRESS AllocateGPUVA(
+        const D3D12_RESOURCE_DESC* pDesc,
+        const D3D12_HEAP_PROPERTIES* pHeapProperties);
 
-    size_t CalculateSize(const D3D12_RESOURCE_DESC* pDesc);
-    size_t GetAlignment(const D3D12_RESOURCE_DESC* pDesc);
-    D3D12_GPU_VIRTUAL_ADDRESS AllocateInternal(size_t size, size_t alignment);
+    void FreeGPUVA(D3D12_GPU_VIRTUAL_ADDRESS address);
 
-    std::unordered_map<D3D12_GPU_VIRTUAL_ADDRESS, size_t> m_allocations;
+    bool RegisterResource(D3D12_GPU_VIRTUAL_ADDRESS address,
+                          ID3D11Resource* resource,
+                          const D3D12_RESOURCE_DESC* pDesc,
+                          const D3D12_HEAP_PROPERTIES* pHeapProperties);
+
+    ID3D11Resource* GetD3D11Resource(D3D12_GPU_VIRTUAL_ADDRESS address);
+
+    bool ValidateAddress(D3D12_GPU_VIRTUAL_ADDRESS address);
+
+    // Debug helpers
+    void DumpAddressMap();
+
+   private:
+    struct ResourceInfo {
+        D3D12_RESOURCE_DIMENSION Dimension;
+        D3D12_RESOURCE_FLAGS Flags;
+        D3D12_HEAP_TYPE HeapType;
+        SIZE_T Size;
+        UINT64 Alignment;
+        bool IsConstantBuffer;
+        bool IsUAV;
+        Microsoft::WRL::ComPtr<ID3D11Resource> D3D11Resource;
+    };
+
+    struct AddressRange {
+        D3D12_GPU_VIRTUAL_ADDRESS Start;
+        D3D12_GPU_VIRTUAL_ADDRESS End;
+        SIZE_T Size;
+        bool IsFree;
+    };
+
+    UINT64 GetRequiredAlignment(const D3D12_RESOURCE_DESC* pDesc,
+                                const D3D12_HEAP_PROPERTIES* pHeapProperties);
+
+    D3D12_GPU_VIRTUAL_ADDRESS AllocateAlignedAddress(SIZE_T size,
+                                                     UINT64 alignment);
+    void CoalesceRanges();
+    bool IsConstantBuffer(const D3D12_RESOURCE_DESC* pDesc);
+    SIZE_T GetResourceSize(const D3D12_RESOURCE_DESC* pDesc);
+
+    std::map<D3D12_GPU_VIRTUAL_ADDRESS, ResourceInfo> m_resourceMap;
+    std::list<AddressRange> m_addressRanges;
+    std::mutex m_mutex;
+
+    const std::vector<
+        std::pair<D3D12_GPU_VIRTUAL_ADDRESS, D3D12_GPU_VIRTUAL_ADDRESS>>
+        m_reservedRanges = {{0x0000000000000000ull, 0x0000000000000FFFull},
+                            {0xFFFFFFFFFFFF0000ull, 0xFFFFFFFFFFFFFFFFull}};
+
+    // Base address for allocations
+    static constexpr D3D12_GPU_VIRTUAL_ADDRESS BASE_ADDRESS = 0x100000000ull;
 };
-
 }  // namespace dxiided

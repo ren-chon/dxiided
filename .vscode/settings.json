@@ -67,7 +67,8 @@
     "thread": "cpp",
     "iostream": "cpp",
     "unordered_set": "cpp",
-    "csignal": "cpp"
+    "csignal": "cpp",
+    "list": "cpp"
   },
   "C_Cpp.clang_format_style": {
     "BasedOnStyle": "Google",

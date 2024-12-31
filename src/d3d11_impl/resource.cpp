@@ -74,7 +74,17 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
       m_currentState(InitialState),
       m_state(InitialState),
       m_isUAV(false),
-      m_format(pDesc->Format) {
+      m_format(pDesc->Format),
+      m_gpuVirtualAddress(0) {
+    // Allocate GPU VA first
+    m_gpuVirtualAddress =
+        GPUVirtualAddressManager().AllocateGPUVA(pDesc, pHeapProperties);
+
+    if (m_gpuVirtualAddress == GPUVirtualAddressManager::GPU_VA_INVALID) {
+        ERR("Failed to allocate GPU virtual address");
+        return;
+    }
+
     // If it looks like a buffer (1D with height=1), treat it as one
     if (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
         (pDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D &&
@@ -208,7 +218,8 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
                 break;
         }
     }
-
+    GPUVirtualAddressManager().RegisterResource(
+        m_gpuVirtualAddress, m_resource.Get(), pDesc, pHeapProperties);
     TRACE(
         "Creating resource type=%d, format=%d, width=%llu, height=%u, this=%p",
         m_desc.Dimension, m_desc.Format, m_desc.Width, m_desc.Height, this);
@@ -234,31 +245,14 @@ WrappedD3D12ToD3D11Resource::WrappedD3D12ToD3D11Resource(
 
 WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
     TRACE("Destroying resource this=%p", this);
-    if (m_gpuAddress) {
-        GPUVirtualAddressManager::Get().Free(m_gpuAddress);
+    if (m_gpuVirtualAddress != 0) {
+        GPUVirtualAddressManager().FreeGPUVA(m_gpuVirtualAddress);
     }
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
-    TRACE("GetGPUVirtualAddress called for resource %p", this);
-    
-    // Only allocate GPU virtual addresses for resources that can be accessed by the GPU
-    if (!m_gpuAddress) {
-        // Check if this is a buffer or texture that needs a GPU address
-        D3D11_BIND_FLAG bindFlags = GetD3D11BindFlags(&m_desc);
-        if (m_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ||
-            (bindFlags & (D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER | 
-             D3D11_BIND_CONSTANT_BUFFER | D3D11_BIND_SHADER_RESOURCE | 
-             D3D11_BIND_UNORDERED_ACCESS))) {
-            m_gpuAddress = GPUVirtualAddressManager::Get().Allocate(&m_desc);
-            TRACE("Allocated GPU virtual address %p for resource %p", m_gpuAddress, this);
-        } else {
-            // Return 0 for resources that don't need GPU addresses
-            TRACE("Resource %p does not need a GPU virtual address", this);
-            return 0;
-        }
-    }
-    return m_gpuAddress;
+    TRACE("GetGPUVirtualAddress called");
+    return m_gpuVirtualAddress;
 }
 
 void WrappedD3D12ToD3D11Resource::StoreInDeviceMap() {
@@ -672,7 +666,6 @@ D3D12_RESOURCE_DESC* WrappedD3D12ToD3D11Resource::GetDesc(
     }
     return pDesc;
 }
-
 
 HRESULT WrappedD3D12ToD3D11Resource::WriteToSubresource(
     UINT DstSubresource, const D3D12_BOX* pDstBox, const void* pSrcData,
