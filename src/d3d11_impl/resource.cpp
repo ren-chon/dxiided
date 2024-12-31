@@ -277,10 +277,17 @@ WrappedD3D12ToD3D11Resource::~WrappedD3D12ToD3D11Resource() {
 
 D3D12_GPU_VIRTUAL_ADDRESS WrappedD3D12ToD3D11Resource::GetGPUVirtualAddress() {
     TRACE("GetGPUVirtualAddress called");
-    if (m_gpuVirtualAddress == 0 || m_gpuVirtualAddress == GPUVirtualAddressManager::GPU_VA_INVALID) {
-        ERR("GVA: Invalid GPU virtual address");
+    if (!m_gpuVirtualAddress) {
+        ERR("GVA: Attempting to get GPU virtual address for resource with no allocation");
         return 0;
     }
+    
+    // Validate the address is still registered
+    if (!GPUVirtualAddressManager::Get().ValidateAddress(m_gpuVirtualAddress)) {
+        ERR("GVA: Retrieved invalid GPU virtual address %llx", m_gpuVirtualAddress);
+        return 0;
+    }
+    
     TRACE("GVA: Retrieved address %llx", m_gpuVirtualAddress);
     return m_gpuVirtualAddress;
 }

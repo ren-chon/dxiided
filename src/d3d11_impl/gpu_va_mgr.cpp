@@ -126,34 +126,27 @@ ID3D11Resource* GPUVirtualAddressManager::GetD3D11Resource(
 bool GPUVirtualAddressManager::ValidateAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
     std::lock_guard<std::mutex> lock(m_mutex);
     
-    if (address == GPU_VA_NULL) {
-        return true;  // NULL is valid
+    // Check if address is null or invalid
+    if (address == GPU_VA_NULL || address == GPU_VA_INVALID) {
+        return false;
     }
-
+    
+    // Check if address is in reserved ranges
+    for (const auto& range : m_reservedRanges) {
+        if (address >= range.first && address <= range.second) {
+            ERR("GVA: Address %llx falls within reserved range [%llx-%llx]", 
+                address, range.first, range.second);
+            return false;
+        }
+    }
+    
+    // Check if address exists in resource map
     auto it = m_resourceMap.find(address);
     if (it == m_resourceMap.end()) {
+        ERR("GVA: Address %llx not found in resource map", address);
         return false;
     }
-
-    const auto& info = it->second;
     
-    // Check alignment
-    if ((address & (info.Alignment - 1)) != 0) {
-        return false;
-    }
-
-    // Validate constant buffer alignment
-    if (info.IsConstantBuffer && 
-        (address & (CONSTANT_BUFFER_ALIGNMENT - 1)) != 0) {
-        return false;
-    }
-
-    // Validate UAV alignment
-    if (info.IsUAV && 
-        (address & (UAV_COUNTER_ALIGNMENT - 1)) != 0) {
-        return false;
-    }
-
     return true;
 }
 
