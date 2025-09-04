@@ -1,89 +1,91 @@
+// gpu_va_mgr.cpp
 #include "d3d11_impl/gpu_va_mgr.hpp"
+#include "d3d11_impl/resource.hpp"
 #include "common/debug.hpp"
 
 namespace dxiided {
 
-GPUVirtualAddressManager& GPUVirtualAddressManager::Get() {
-    static GPUVirtualAddressManager instance;
-    return instance;
+GPUVirtualAddressManager::GPUVirtualAddressManager() : m_nextAddress(BASE_ADDRESS) {
+    TRACE("GPUVirtualAddressManager created");
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::Allocate(
-    const D3D12_RESOURCE_DESC* pDesc) {
-    size_t size = CalculateSize(pDesc);
-    size_t alignment = GetAlignment(pDesc);
-    return AllocateInternal(size, alignment);
-}
-
-void GPUVirtualAddressManager::Free(D3D12_GPU_VIRTUAL_ADDRESS address) {
-    auto it = m_allocations.find(address);
-    if (it != m_allocations.end()) {
-        VirtualFree((LPVOID)address, 0, MEM_RELEASE);
-        m_allocations.erase(it);
+GPUVirtualAddressManager::~GPUVirtualAddressManager() {
+    TRACE("GPUVirtualAddressManager destroyed, %zu addresses still allocated", m_addressToResource.size());
+    if (!m_addressToResource.empty()) {
+        WARN("GPU virtual addresses still allocated during manager destruction");
     }
 }
 
-size_t GPUVirtualAddressManager::CalculateSize(const D3D12_RESOURCE_DESC* pDesc) {
-    size_t size = 0;
+D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateGPUVirtualAddress(WrappedD3D12ToD3D11Resource* resource) {
+    if (!resource) {
+        ERR("Attempted to allocate GPU virtual address for null resource");
+        return 0;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
     
-    switch (pDesc->Dimension) {
-        case D3D12_RESOURCE_DIMENSION_BUFFER:
-            size = pDesc->Width;
-            break;
-            
-        case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-            size = pDesc->Width * pDesc->DepthOrArraySize * pDesc->MipLevels;
-            break;
-            
-        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-            size = pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize * 
-                   pDesc->MipLevels;
-            break;
-            
-        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-            size = pDesc->Width * pDesc->Height * pDesc->DepthOrArraySize * 
-                   pDesc->MipLevels;
-            break;
-            
-        default:
-            WARN("Unknown resource dimension: %d", pDesc->Dimension);
-            size = pDesc->Width;  // fallback to minimum
+    // Check if this resource already has an address
+    auto it = m_resourceToAddress.find(resource);
+    if (it != m_resourceToAddress.end()) {
+        TRACE("Resource %p already has GPU virtual address %llu", resource, it->second);
+        return it->second;
     }
     
-    return size;
-}
-
-size_t GPUVirtualAddressManager::GetAlignment(const D3D12_RESOURCE_DESC* pDesc) {
-    switch (pDesc->Dimension) {
-        case D3D12_RESOURCE_DIMENSION_BUFFER:
-            return 256;  // D3D12 buffer alignment
-            
-        case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-        case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-        case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-            return 512;  // D3D12 texture alignment
-            
-        default:
-            WARN("Unknown resource dimension: %d", pDesc->Dimension);
-            return 256;  // minimum alignment
-    }
-}
-
-D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::AllocateInternal(
-    size_t size, size_t alignment) {
-    // Round up size to alignment
-    size_t aligned_size = (size + alignment - 1) & ~(alignment - 1);
+    // Allocate a new address
+    D3D12_GPU_VIRTUAL_ADDRESS address = m_nextAddress;
+    m_nextAddress += 0x1000; // Increment by 4KB for the next allocation
     
-    void* addr = VirtualAlloc(NULL, aligned_size, MEM_RESERVE, PAGE_NOACCESS);
-    if (!addr) {
-        WARN("VirtualAlloc failed with error: %lu", GetLastError());
+    // Store mappings
+    m_addressToResource[address] = resource;
+    m_resourceToAddress[resource] = address;
+    
+    TRACE("Allocated GPU virtual address %llu for resource %p", address, resource);
+    return address;
+}
+
+void GPUVirtualAddressManager::FreeGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    auto it = m_addressToResource.find(address);
+    if (it == m_addressToResource.end()) {
+        WARN("Attempted to free non-existent GPU virtual address %llu", address);
+        return;
+    }
+    
+    WrappedD3D12ToD3D11Resource* resource = it->second;
+    m_resourceToAddress.erase(resource);
+    m_addressToResource.erase(address);
+    
+    TRACE("Freed GPU virtual address %llu for resource %p", address, resource);
+}
+
+WrappedD3D12ToD3D11Resource* GPUVirtualAddressManager::GetResourceFromGPUVirtualAddress(D3D12_GPU_VIRTUAL_ADDRESS address) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    auto it = m_addressToResource.find(address);
+    if (it == m_addressToResource.end()) {
+        WARN("GPU virtual address %llu not found", address);
+        return nullptr;
+    }
+    
+    return it->second;
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS GPUVirtualAddressManager::GetGPUVirtualAddressFromResource(WrappedD3D12ToD3D11Resource* resource) {
+    if (!resource) {
+        ERR("Attempted to get GPU virtual address for null resource");
+        return 0;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    auto it = m_resourceToAddress.find(resource);
+    if (it == m_resourceToAddress.end()) {
+        WARN("Resource %p does not have a GPU virtual address", resource);
         return 0;
     }
     
-    D3D12_GPU_VIRTUAL_ADDRESS gpu_addr = (D3D12_GPU_VIRTUAL_ADDRESS)addr;
-    m_allocations[gpu_addr] = aligned_size;
-    
-    return gpu_addr;
+    return it->second;
 }
 
-}  // namespace dxiided
+} // namespace dxiided
